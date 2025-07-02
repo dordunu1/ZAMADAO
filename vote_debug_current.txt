@@ -1,0 +1,42 @@
+Current Voting Issue Debug Summary
+==================================
+
+Summary of Current Issue:
+------------------------
+- The dev's suggestion to pass handles[0] and proof directly to the contract gives an encoding error (hex_replace is not a function) in ethers.js.
+- Using ethers.hexlify to convert both handles[0] and inputProof to hex strings allows the contract call to encode correctly.
+- However, only the first vote for a proposal succeeds; all subsequent votes (from different addresses, with different encrypted values and proofs) fail, even though all contract requirements are met.
+
+Frontend vote logic (ProposalDetails.tsx):
+------------------------------------------
+- Uses FHE SDK to create encrypted input for each vote:
+  const ciphertext = await fhe.createEncryptedInput(contractAddress, userAddress);
+  ciphertext.add64(voteType); // voteType is 0, 1, or 2
+  const { handles, proof } = await ciphertext.encrypt();
+- Calls the contract vote function as:
+  await contract.vote(proposalId, handles[0], proof);
+- Each vote (from a different address) generates a different encrypted value and proof.
+
+Observed behavior:
+------------------
+- The first address to vote on a proposal succeeds.
+- All subsequent addresses (with tokens, not voted before, correct proposalId, and unique proof/encrypted values) get a failed transaction after 1 block confirmation.
+- The contract's require checks are:
+  - proposalId < proposals.length
+  - block.timestamp < prop.endTime
+  - !hasVoted[proposalId][msg.sender]
+  - IERC20(prop.token).balanceOf(msg.sender) > 0
+- All these conditions are met for each address.
+
+What was checked:
+-----------------
+- Each address has a positive token balance.
+- Each address has not voted before.
+- Each vote uses a unique encrypted value and proof.
+- The proposalId is correct and voting is still open.
+
+What to ask the dev:
+--------------------
+- Why does only the first vote succeed, while all subsequent votes fail, even though all contract requirements are met and each vote uses a unique proof and encrypted value?
+- Is there any FHE or contract-specific reason why only one vote would be accepted per proposal?
+- Is there a specific way the proof or encrypted value must be generated for each user? 
