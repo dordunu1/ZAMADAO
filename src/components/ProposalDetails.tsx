@@ -39,9 +39,10 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const [hasUserVoted, setHasUserVoted] = useState(userVoted);
   const { address: connectedAddress } = useAccount();
   const isCreator = connectedAddress && proposal.creator && connectedAddress.toLowerCase() === proposal.creator.toLowerCase();
+  const [isResolving, setIsResolving] = useState(false);
 
   const canVote = proposal.status === ProposalStatus.Active && !hasUserVoted;
-  const canResolve = proposal.status === ProposalStatus.Reveal && !proposal.resolved && !revealRequested;
+  const canResolve = proposal.status === ProposalStatus.Reveal && !revealRequested;
 
   const totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
   const forPercentage = totalVotes > 0 ? (proposal.forVotes / totalVotes) * 100 : 0;
@@ -124,6 +125,9 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
     }
   };
 
+  // Use only revealRequested to determine if proposal is resolved
+  const isProposalResolved = revealRequested;
+
   useEffect(() => {
     const decryptTallies = async () => {
       const fhe = getFheInstance();
@@ -180,10 +184,10 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       }
     };
 
-    if (!proposal.resolved) {
+    if (isProposalResolved) {
       decryptTallies();
     }
-  }, [proposal]);
+  }, [proposal, isProposalResolved]);
 
   // Fetch reveal requested and hasVoted state
   useEffect(() => {
@@ -205,6 +209,16 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
     };
     fetchStates();
   }, [proposal.id]);
+
+  // Handler for resolve button
+  const handleResolveClick = async () => {
+    setIsResolving(true);
+    try {
+      await onResolve(proposal.id);
+    } finally {
+      setIsResolving(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
@@ -261,7 +275,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
           status={proposal.status}
           votingDeadline={proposal.votingDeadline}
           resolutionDeadline={proposal.resolutionDeadline}
-          resolved={proposal.resolved}
+          resolved={isProposalResolved}
         />
         
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -300,12 +314,12 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
           
           {canResolve && isCreator && (
             <button
-              onClick={() => onResolve(proposal.id)}
+              onClick={handleResolveClick}
               className="flex items-center gap-2 px-6 py-3 bg-success text-white rounded-xl hover:bg-success/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg transform hover:scale-105"
-              disabled={!canResolve}
+              disabled={!canResolve || isResolving}
             >
               <Settings size={16} />
-              Resolve Proposal
+              {isResolving ? 'Resolving...' : 'Resolve Proposal'}
             </button>
           )}
         </div>
@@ -355,18 +369,18 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       </div>
 
       {/* Results */}
-      {(proposal.resolved || totalVotes > 0) && (
+      {(isProposalResolved || totalVotes > 0) && (
         <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-2xl p-8 shadow-zama">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-xl font-semibold text-accent dark:text-text-primary-dark">Results</h2>
-            {proposal.resolved && (
+            {isProposalResolved && (
               <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${
                 proposal.passed 
                   ? 'bg-success/10 text-success border border-success/30' 
                   : 'bg-danger/10 text-danger border border-danger/30'
               }`}>
                 {proposal.passed ? <CheckCircle size={16} /> : <XCircle size={16} />}
-                {proposal.passed ? 'Passed' : 'Failed'}
+                {proposal.passed ? 'Passed' : 'Resolved'}
               </div>
             )}
           </div>
