@@ -50,9 +50,9 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
               <span>{truncateAddress(proposal.creator)}</span>
             </div>
             {proposal.quorum && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary border border-primary/20 rounded-xl ml-2">
+              <div className="flex flex-row items-center gap-1 px-2 py-1 bg-primary/10 text-primary border border-primary/20 rounded-xl ml-2 whitespace-nowrap">
                 <Users size={14} />
-                <span className="font-medium">Quorum: {proposal.quorum}%</span>
+                <span className="font-medium whitespace-nowrap">Quorum: {proposal.quorum}%</span>
               </div>
             )}
           </div>

@@ -448,9 +448,9 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-success">
-                  {proposal.resolved
-                    ? proposal.forVotes.toLocaleString()
-                    : decryptedTallies?.for?.toLocaleString() ?? 'Decrypting...'}
+                  {isProposalResolved
+                    ? (decryptedTallies?.for?.toLocaleString() ?? <span className="text-success">Decrypting...</span>)
+                    : <span className="text-success">Encrypted</span>}
                 </div>
               </div>
             </div>
@@ -462,9 +462,9 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-danger">
-                  {proposal.resolved
-                    ? proposal.againstVotes.toLocaleString()
-                    : decryptedTallies?.against?.toLocaleString() ?? 'Decrypting...'}
+                  {isProposalResolved
+                    ? (decryptedTallies?.against?.toLocaleString() ?? <span className="text-danger">Decrypting...</span>)
+                    : <span className="text-danger">Encrypted</span>}
                 </div>
               </div>
             </div>
@@ -476,9 +476,9 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-abstain">
-                  {proposal.resolved
-                    ? proposal.abstainVotes.toLocaleString()
-                    : decryptedTallies?.abstain?.toLocaleString() ?? 'Decrypting...'}
+                  {isProposalResolved
+                    ? (decryptedTallies?.abstain?.toLocaleString() ?? <span className="text-abstain">Decrypting...</span>)
+                    : <span className="text-abstain">Encrypted</span>}
                 </div>
               </div>
             </div>
