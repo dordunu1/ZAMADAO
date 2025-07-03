@@ -13,6 +13,7 @@ import { getAddress } from 'ethers';
 import { hexlify } from 'ethers';
 import { BrowserProvider } from 'ethers';
 import { ethers } from 'ethers';
+import { getVotesForProposal } from '../utils/firestoreProposals';
 
 interface ProposalDetailsProps {
   proposal: Proposal;
@@ -40,14 +41,14 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const { address: connectedAddress } = useAccount();
   const isCreator = connectedAddress && proposal.creator && connectedAddress.toLowerCase() === proposal.creator.toLowerCase();
   const [isResolving, setIsResolving] = useState(false);
+  const [votes, setVotes] = useState<any[]>([]);
 
   const canVote = proposal.status === ProposalStatus.Active && !hasUserVoted;
   const canResolve = proposal.status === ProposalStatus.Reveal && !revealRequested;
 
-  const totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
-  const forPercentage = totalVotes > 0 ? (proposal.forVotes / totalVotes) * 100 : 0;
-  const againstPercentage = totalVotes > 0 ? (proposal.againstVotes / totalVotes) * 100 : 0;
-  const abstainPercentage = totalVotes > 0 ? (proposal.abstainVotes / totalVotes) * 100 : 0;
+  const totalVotes = votes.length;
+  const confidentialVotes = votes.length; // All votes are confidential in this system
+  const privacyRate = totalVotes > 0 ? Math.round((confidentialVotes / totalVotes) * 100) : 0;
 
   const renderMarkdown = (text: string) => {
     return text
@@ -220,6 +221,11 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
     }
   };
 
+  useEffect(() => {
+    // Fetch votes from Firestore
+    getVotesForProposal(proposal.id).then(setVotes);
+  }, [proposal.id]);
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
       {/* Header */}
@@ -352,17 +358,15 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         <h2 className="text-xl font-semibold mb-6 text-accent dark:text-text-primary-dark">Participation</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
           <div className="text-center p-6 bg-surface dark:bg-surface-dark rounded-xl">
-            <div className="text-3xl font-bold text-accent dark:text-text-primary-dark">{proposal.totalVotes}</div>
+            <div className="text-3xl font-bold text-accent dark:text-text-primary-dark">{totalVotes}</div>
             <div className="text-sm text-text-secondary dark:text-text-secondary-dark mt-1">Total Votes</div>
           </div>
           <div className="text-center p-6 bg-surface dark:bg-surface-dark rounded-xl">
-            <div className="text-3xl font-bold text-accent dark:text-text-primary-dark">{proposal.confidentialVotes}</div>
+            <div className="text-3xl font-bold text-accent dark:text-text-primary-dark">{confidentialVotes}</div>
             <div className="text-sm text-text-secondary dark:text-text-secondary-dark mt-1">Confidential Votes</div>
           </div>
           <div className="text-center p-6 bg-surface dark:bg-surface-dark rounded-xl">
-            <div className="text-3xl font-bold text-accent dark:text-text-primary-dark">
-              {proposal.totalVotes > 0 ? Math.round((proposal.confidentialVotes / proposal.totalVotes) * 100) : 0}%
-            </div>
+            <div className="text-3xl font-bold text-accent dark:text-text-primary-dark">{privacyRate}%</div>
             <div className="text-sm text-text-secondary dark:text-text-secondary-dark mt-1">Privacy Rate</div>
           </div>
         </div>
@@ -397,7 +401,6 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                     ? proposal.forVotes.toLocaleString()
                     : decryptedTallies?.for?.toLocaleString() ?? 'Decrypting...'}
                 </div>
-                <div className="text-sm text-text-secondary dark:text-text-secondary-dark">{forPercentage.toFixed(1)}%</div>
               </div>
             </div>
 
@@ -412,7 +415,6 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                     ? proposal.againstVotes.toLocaleString()
                     : decryptedTallies?.against?.toLocaleString() ?? 'Decrypting...'}
                 </div>
-                <div className="text-sm text-text-secondary dark:text-text-secondary-dark">{againstPercentage.toFixed(1)}%</div>
               </div>
             </div>
 
@@ -427,7 +429,6 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                     ? proposal.abstainVotes.toLocaleString()
                     : decryptedTallies?.abstain?.toLocaleString() ?? 'Decrypting...'}
                 </div>
-                <div className="text-sm text-text-secondary dark:text-text-secondary-dark">{abstainPercentage.toFixed(1)}%</div>
               </div>
             </div>
           </div>
