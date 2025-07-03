@@ -116,7 +116,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         abi: DAO_ABI,
         functionName: 'vote',
         args: [proposal.id, encryptedHex, proofHex],
-        gas: BigInt(5_000_000),
+        gas: BigInt(1000000),
       });
 
       onCastVote(voteType, normalizedBalance);

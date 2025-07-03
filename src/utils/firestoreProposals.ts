@@ -45,6 +45,7 @@ export async function getProposals(): Promise<Proposal[]> {
 // Add a vote to a proposal (proposalId: number)
 export async function addVote(proposalId: number, vote: Vote) {
   const votesCol = collection(db, 'proposals', proposalId.toString(), 'votes');
+  console.log('addVote: writing to', `proposals/${proposalId}/votes`, 'vote:', vote);
   await addDoc(votesCol, vote);
 }
 

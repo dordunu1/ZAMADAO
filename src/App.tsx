@@ -144,19 +144,17 @@ function App() {
   };
 
   const handleCastVote = async (voteType: VoteType, weight: number) => {
-    if (!selectedProposalId) return;
-    // TODO: Encrypt vote and generate proof for FHEVM
-    // await writeContractAsync({
-    //   address: DAO_CONTRACT_ADDRESS,
-    //   abi: DAO_ABI,
-    //   functionName: 'vote',
-    //   args: [selectedProposalId, encryptedVote, inputProof],
-    // });
-    await addVote(selectedProposalId, {
+    if (!selectedProposalId) {
+      console.log('No selectedProposalId!');
+      return;
+    }
+    const voteObj = {
       voter: connectedAddress || '',
       type: voteType === VoteType.For ? 'for' : voteType === VoteType.Against ? 'against' : 'abstain',
       timestamp: Date.now(),
-    });
+    };
+    console.log('Writing vote for proposal:', selectedProposalId, 'vote:', voteObj);
+    await addVote(selectedProposalId, voteObj);
     setProposals(prev => prev.map(p => 
       p.id === selectedProposalId 
         ? { 
