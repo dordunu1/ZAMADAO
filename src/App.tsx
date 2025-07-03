@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Gavel, Copy, CheckCircle } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import ProposalDetails from './components/ProposalDetails';
@@ -63,6 +63,15 @@ function App() {
     };
     fetchClaimed();
   }, [connectedAddress]);
+
+  // On mount, set selectedProposalId from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const proposalParam = params.get('proposal');
+    if (proposalParam !== null) {
+      setSelectedProposalId(Number(proposalParam));
+    }
+  }, []);
 
   const handleCreateProposal = async (title: string, description: string, votingDeadline: number, tokenAddress: string, quorum: number) => {
     const now = Date.now();
@@ -261,6 +270,14 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // When a proposal is selected, update the URL
+  const handleViewProposal = (id: number) => {
+    setSelectedProposalId(id);
+    const params = new URLSearchParams(window.location.search);
+    params.set('proposal', id.toString());
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
   return (
     <div className="min-h-screen bg-zama-gradient dark:bg-zama-gradient-dark transition-all duration-300">
       {/* Header */}
@@ -297,7 +314,12 @@ function App() {
         {selectedProposal ? (
           <ProposalDetails
             proposal={selectedProposal}
-            onBack={() => setSelectedProposalId(null)}
+            onBack={() => {
+              setSelectedProposalId(null);
+              const params = new URLSearchParams(window.location.search);
+              params.delete('proposal');
+              window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`);
+            }}
             onShare={handleShareProposal}
             onCastVote={(voteType, votingPower) => handleCastVote(selectedProposal.id, voteType, votingPower)}
             onResolve={handleResolveProposal}
@@ -307,7 +329,7 @@ function App() {
           <Dashboard
             proposals={proposals}
             onCreateProposal={handleCreateProposal as any}
-            onViewProposal={setSelectedProposalId}
+            onViewProposal={handleViewProposal}
             onShareProposal={handleShareProposal}
           />
         )}
