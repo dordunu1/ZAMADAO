@@ -45,7 +45,7 @@ function App() {
     });
   }, []);
 
-  const handleCreateProposal = async (title: string, description: string, votingDeadline: number, tokenAddress: string) => {
+  const handleCreateProposal = async (title: string, description: string, votingDeadline: number, tokenAddress: string, quorum: number) => {
     const now = Date.now();
     const RESOLUTION_PHASE_DURATION = 1 * 24 * 60 * 60 * 1000; // 1 day after voting ends
     const tempId = 'pending-' + now;
@@ -66,6 +66,7 @@ function App() {
       totalVotes: 0,
       confidentialVotes: 0,
       token: tokenAddress,
+      quorum,
     };
     await addProposal(optimisticProposal);
     setProposals(prev => [
@@ -121,6 +122,7 @@ function App() {
           ...optimisticProposal,
           id: proposalId,
           status: ProposalStatus.Active,
+          quorum,
         };
         await addProposal(confirmedProposal);
         // Delete the pending proposal from Firestore
@@ -148,9 +150,13 @@ function App() {
       console.log('No selectedProposalId!');
       return;
     }
+    let type: 'for' | 'against' | 'abstain';
+    if (voteType === VoteType.For) type = 'for';
+    else if (voteType === VoteType.Against) type = 'against';
+    else type = 'abstain';
     const voteObj = {
       voter: connectedAddress || '',
-      type: voteType === VoteType.For ? 'for' : voteType === VoteType.Against ? 'against' : 'abstain',
+      type,
       timestamp: Date.now(),
       votingPower: votingPower,
     };
@@ -257,7 +263,7 @@ function App() {
         ) : (
           <Dashboard
             proposals={proposals}
-            onCreateProposal={handleCreateProposal}
+            onCreateProposal={handleCreateProposal as any}
             onViewProposal={setSelectedProposalId}
             onShareProposal={handleShareProposal}
           />

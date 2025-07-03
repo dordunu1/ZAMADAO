@@ -27,6 +27,7 @@ export interface Proposal {
   totalVotes: number; // Changed from totalCommits/totalReveals
   confidentialVotes: number; // New field for confidential votes
   token: string; // Token address required to vote
+  quorum?: number;
 }
 
 export interface Vote {

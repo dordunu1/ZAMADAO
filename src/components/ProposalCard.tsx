@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { User, Clock, Shield, Link, ThumbsUp, ThumbsDown, MinusCircle } from 'lucide-react';
+import { User, Clock, Shield, Link, ThumbsUp, ThumbsDown, MinusCircle, Users } from 'lucide-react';
 import { Proposal } from '../types/proposal';
 import StatusBadge from './StatusBadge';
 import { formatTimeRemaining, formatDate } from '../utils/time';
@@ -32,6 +32,11 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
   const nextDeadline = getNextDeadline();
   const totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
 
+  function truncateAddress(address: string) {
+    if (!address) return '';
+    return address.slice(0, 6) + '...' + address.slice(-4);
+  }
+
   return (
     <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-xl p-6 hover:shadow-zama-lg transition-all duration-300 animate-fade-in transform hover:scale-[1.02]">
       <div className="flex items-start justify-between mb-4">
@@ -42,9 +47,14 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
           <div className="flex items-center gap-4 text-sm text-text-secondary dark:text-text-secondary-dark mb-3">
             <div className="flex items-center gap-1">
               <User size={14} />
-              <span>{proposal.creator}</span>
+              <span>{truncateAddress(proposal.creator)}</span>
             </div>
-            <div>{formatDate(proposal.createdAt)}</div>
+            {proposal.quorum && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary border border-primary/20 rounded-xl ml-2">
+                <Users size={14} />
+                <span className="font-medium">Quorum: {proposal.quorum}%</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 ml-4">
@@ -62,15 +72,6 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
       <p className="text-text-secondary dark:text-text-secondary-dark text-sm mb-4 line-clamp-3">
         {proposal.description.replace(/#{1,6}\s/g, '').substring(0, 150)}...
       </p>
-
-      {nextDeadline && (
-        <div className="flex items-center gap-2 mb-4 p-3 bg-primary/10 dark:bg-primary/20 rounded-xl border border-primary/20">
-          <Clock size={16} className="text-primary" />
-          <span className="text-sm font-medium text-primary">
-            {nextDeadline.label} in {formatTimeRemaining(nextDeadline.deadline)}
-          </span>
-        </div>
-      )}
 
       {proposal.resolved && totalVotes > 0 && (
         <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-surface dark:bg-surface-dark rounded-xl">

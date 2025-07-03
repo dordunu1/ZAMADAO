@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { X, PlusCircle, Eye, Calendar, Clock, Coins } from 'lucide-react';
+import { X, PlusCircle, Eye, Calendar, Clock, Coins, Users } from 'lucide-react';
 
 interface CreateProposalModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (title: string, description: string, votingDeadline: number, tokenAddress: string) => void;
+  onSubmit: (title: string, description: string, votingDeadline: number, tokenAddress: string, quorum: number) => void;
 }
 
 const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClose, onSubmit }) => {
@@ -14,6 +14,7 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClo
   const [tokenAddress, setTokenAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quorum, setQuorum] = useState(10);
   
   // Default to 2 days for voting
   const now = new Date();
@@ -31,10 +32,11 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClo
       setError(null);
       try {
         const votingDeadline = new Date(`${votingEndDate}T${votingEndTime}`).getTime();
-        await onSubmit(title.trim(), description.trim(), votingDeadline, tokenAddress.trim());
+        await onSubmit(title.trim(), description.trim(), votingDeadline, tokenAddress.trim(), quorum);
         setTitle('');
         setDescription('');
         setTokenAddress('');
+        setQuorum(10);
         onClose();
       } catch (err: any) {
         setError(err.message || 'Failed to create proposal.');
@@ -162,20 +164,39 @@ Explain the benefits to the DAO."
                 )}
               </div>
 
-              <div>
-                <label htmlFor="tokenAddress" className="block text-sm font-medium text-accent dark:text-text-primary-dark mb-2 flex items-center gap-2">
-                  <Coins className="text-primary" size={18} />
-                  Voting Token Address
-                </label>
-                <input
-                  type="text"
-                  id="tokenAddress"
-                  value={tokenAddress}
-                  onChange={(e) => setTokenAddress(e.target.value)}
-                  placeholder="0x... (ERC-20 token address required to vote)"
-                  className="w-full px-4 py-3 border border-zama-light-orange dark:border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white/80 dark:bg-card-dark/80 backdrop-blur-sm text-accent dark:text-text-primary-dark transition-all duration-300 font-mono"
-                  required
-                />
+              <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-1">
+                  <label htmlFor="tokenAddress" className="block text-sm font-medium text-accent dark:text-text-primary-dark mb-2 flex items-center gap-2">
+                    <Coins className="text-primary" size={18} />
+                    Voting Token Address
+                  </label>
+                  <input
+                    type="text"
+                    id="tokenAddress"
+                    value={tokenAddress}
+                    onChange={(e) => setTokenAddress(e.target.value)}
+                    placeholder="0x... (ERC-20 token address required to vote)"
+                    className="w-full px-4 py-3 border border-zama-light-orange dark:border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white/80 dark:bg-card-dark/80 backdrop-blur-sm text-accent dark:text-text-primary-dark transition-all duration-300 font-mono"
+                    required
+                  />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="quorum" className="block text-sm font-medium text-accent dark:text-text-primary-dark mb-2 flex items-center gap-2">
+                    <Users className="text-primary" size={18} />
+                    Quorum (%)
+                  </label>
+                  <input
+                    type="number"
+                    id="quorum"
+                    min="1"
+                    max="100"
+                    value={quorum}
+                    onChange={(e) => setQuorum(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                    placeholder="10"
+                    className="w-full px-4 py-3 border border-zama-light-orange dark:border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white/80 dark:bg-card-dark/80 backdrop-blur-sm text-accent dark:text-text-primary-dark transition-all duration-300 font-mono"
+                    required
+                  />
+                </div>
               </div>
 
               {/* Voting Timeline Configuration */}
