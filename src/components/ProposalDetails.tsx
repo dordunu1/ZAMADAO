@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle, Copy, Link2 } from 'lucide-react';
+import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle, Copy, Link2, Loader2 } from 'lucide-react';
 import { Proposal, ProposalStatus, VoteType } from '../types/proposal';
 import StatusBadge from './StatusBadge';
 import ProgressTimeline from './ProgressTimeline';
@@ -44,6 +44,8 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const [votes, setVotes] = useState<any[]>([]);
   const [userVotingPower, setUserVotingPower] = useState<number | null>(null);
   const [checkingVotingPower, setCheckingVotingPower] = useState(false);
+  const [tokenSymbol, setTokenSymbol] = useState<string | null>(null);
+  const [symbolLoading, setSymbolLoading] = useState(false);
 
   const canVote = proposal.status === ProposalStatus.Active && !hasUserVoted;
   const canResolve = proposal.status === ProposalStatus.Reveal && !revealRequested;
@@ -263,6 +265,36 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
     fetchVotingPower();
   }, [connectedAddress, proposal.token]);
 
+  useEffect(() => {
+    // Fetch token symbol for the voting token
+    const fetchSymbol = async () => {
+      if (!proposal.token) {
+        setTokenSymbol(null);
+        return;
+      }
+      setSymbolLoading(true);
+      try {
+        let provider;
+        if (window.ethereum) {
+          provider = new ethers.BrowserProvider(window.ethereum);
+        } else {
+          setTokenSymbol(null);
+          setSymbolLoading(false);
+          return;
+        }
+        const tokenContract = new ethers.Contract(proposal.token, [
+          'function symbol() view returns (string)'
+        ], provider);
+        const symbol = await tokenContract.symbol();
+        setTokenSymbol(symbol);
+      } catch (err) {
+        setTokenSymbol(null);
+      }
+      setSymbolLoading(false);
+    };
+    fetchSymbol();
+  }, [proposal.token]);
+
   function truncateAddress(address: string) {
     if (!address) return '';
     return address.slice(0, 6) + '...' + address.slice(-4);
@@ -311,6 +343,11 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
           <div className="flex items-center gap-2 px-3 py-1 bg-surface dark:bg-surface-dark rounded-xl border border-zama-light-orange dark:border-border-dark">
             <Link2 size={16} className="text-primary" />
             <span className="font-mono">{truncateAddress(proposal.token)}</span>
+            {symbolLoading ? (
+              <Loader2 className="animate-spin ml-2 text-primary" size={14} />
+            ) : tokenSymbol && (
+              <span className="ml-2 text-xs font-semibold text-primary">({tokenSymbol})</span>
+            )}
           </div>
         </div>
 

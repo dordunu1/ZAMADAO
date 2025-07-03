@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, PlusCircle, Eye, Calendar, Clock, Coins, Users } from 'lucide-react';
+import { X, PlusCircle, Eye, Calendar, Clock, Coins, Users, BadgeDollarSign } from 'lucide-react';
 
 interface CreateProposalModalProps {
   isOpen: boolean;
@@ -22,6 +22,9 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClo
   
   const [votingEndDate, setVotingEndDate] = useState(defaultVotingEnd.toISOString().split('T')[0]);
   const [votingEndTime, setVotingEndTime] = useState(defaultVotingEnd.toTimeString().slice(0, 5));
+
+  // Hardcoded for now; ideally this would be fetched from the contract
+  const proposalFeeEth = 0.2;
 
   if (!isOpen) return null;
 
@@ -65,26 +68,34 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClo
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white/95 dark:bg-card-dark/95 backdrop-blur-sm rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-slide-up shadow-zama-lg border border-zama-light-orange dark:border-border-dark">
-        <div className="flex items-center justify-between p-6 border-b border-zama-light-orange dark:border-border-dark">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-2">
+      <div className="bg-white/95 dark:bg-card-dark/95 backdrop-blur-sm rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-slide-up shadow-zama-lg border border-zama-light-orange dark:border-border-dark">
+        <div className="flex items-center justify-between p-4 border-b border-zama-light-orange dark:border-border-dark">
           <div className="flex items-center gap-2">
-            <PlusCircle className="text-primary" size={24} />
-            <h2 className="text-xl font-semibold text-accent dark:text-text-primary-dark">Create New Proposal</h2>
+            <PlusCircle className="text-primary" size={20} />
+            <h2 className="text-lg font-semibold text-accent dark:text-text-primary-dark">Create New Proposal</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-text-muted dark:text-text-muted-dark hover:text-text-secondary dark:hover:text-text-secondary-dark rounded-xl hover:bg-surface dark:hover:bg-surface-dark transition-all duration-300"
+            className="p-1 text-text-muted dark:text-text-muted-dark hover:text-text-secondary dark:hover:text-text-secondary-dark rounded-xl hover:bg-surface dark:hover:bg-surface-dark transition-all duration-300"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
+        </div>
+
+        {/* Creation Fee Badge */}
+        <div className="flex justify-center mt-2">
+          <span className="flex items-center gap-2 bg-yellow-300 text-black font-semibold px-3 py-1 rounded-full shadow border border-yellow-400 text-sm">
+            <BadgeDollarSign className="text-black" size={16} />
+            Proposal Creation Fee: {proposalFeeEth} ETH
+          </span>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col h-full">
           <div className="flex-1 overflow-auto">
-            <div className="p-6 space-y-6">
+            <div className="p-4 space-y-4">
               <div>
-                <label htmlFor="title" className="block text-sm font-medium text-accent dark:text-text-primary-dark mb-2">
+                <label htmlFor="title" className="block text-xs font-medium text-accent dark:text-text-primary-dark mb-1">
                   Proposal Title
                 </label>
                 <input
@@ -93,7 +104,7 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClo
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Enter a clear, descriptive title for your proposal"
-                  className="w-full px-4 py-3 border border-zama-light-orange dark:border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white/80 dark:bg-card-dark/80 backdrop-blur-sm text-accent dark:text-text-primary-dark transition-all duration-300"
+                  className="w-full px-3 py-2 border border-zama-light-orange dark:border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white/80 dark:bg-card-dark/80 backdrop-blur-sm text-accent dark:text-text-primary-dark transition-all duration-300 text-sm"
                   required
                 />
               </div>

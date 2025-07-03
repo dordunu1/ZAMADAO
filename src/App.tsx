@@ -9,7 +9,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { addProposal, getProposals, addVote } from './utils/firestoreProposals';
 import { useAccount } from 'wagmi';
 import { useWriteContract } from 'wagmi';
-import { getDaoContractConfig, DAO_CONTRACT_ADDRESS, DAO_ABI } from './utils/daoContract';
+import { getDaoContractConfig, DAO_CONTRACT_ADDRESS, DAO_ABI, claimZamaDaoTokens, getClaimedAmount, ZAMADAO_TOKEN_ADDRESS } from './utils/daoContract';
 import { initializeFheInstance } from './utils/fheInstance';
 import { ethers } from 'ethers';
 import { deleteDoc, doc } from 'firebase/firestore';
@@ -22,6 +22,8 @@ function App() {
   const [toastMessage, setToastMessage] = useState<string>('');
   const { address: connectedAddress } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const [claimLoading, setClaimLoading] = useState(false);
+  const [claimed, setClaimed] = useState<bigint>(0n);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -44,6 +46,23 @@ function App() {
       );
     });
   }, []);
+
+  React.useEffect(() => {
+    if (!connectedAddress || !window.ethereum) {
+      setClaimed(0n);
+      return;
+    }
+    const fetchClaimed = async () => {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const claimedAmount = await getClaimedAmount(connectedAddress, provider);
+        setClaimed(BigInt(claimedAmount));
+      } catch (e) {
+        setClaimed(0n);
+      }
+    };
+    fetchClaimed();
+  }, [connectedAddress]);
 
   const handleCreateProposal = async (title: string, description: string, votingDeadline: number, tokenAddress: string, quorum: number) => {
     const now = Date.now();
@@ -82,6 +101,7 @@ function App() {
       abi: DAO_ABI,
       functionName: 'createProposal',
       args: [tokenAddress, durationSeconds],
+      value: ethers.parseEther('0.2'), // Proposal fee, should match contract
     });
 
     // In the background, poll for the transaction receipt and update Firestore with the real proposalId
@@ -145,9 +165,9 @@ function App() {
     });
   };
 
-  const handleCastVote = async (voteType: VoteType, votingPower: number) => {
-    if (!selectedProposalId) {
-      console.log('No selectedProposalId!');
+  const handleCastVote = async (proposalId: number, voteType: VoteType, votingPower: number) => {
+    if (proposalId === undefined || proposalId === null) {
+      console.log('No proposalId!');
       return;
     }
     let type: 'for' | 'against' | 'abstain';
@@ -160,10 +180,10 @@ function App() {
       timestamp: Date.now(),
       votingPower: votingPower,
     };
-    console.log('Writing vote for proposal:', selectedProposalId, 'vote:', voteObj);
-    await addVote(selectedProposalId, voteObj);
+    console.log('Writing vote for proposal:', proposalId, 'vote:', voteObj);
+    await addVote(proposalId, voteObj);
     setProposals(prev => prev.map(p => 
-      p.id === selectedProposalId 
+      p.id === proposalId 
         ? { 
             ...p, 
             totalVotes: p.totalVotes + 1,
@@ -173,7 +193,7 @@ function App() {
     ));
     setUserVotes(prev => ({
       ...prev,
-      [selectedProposalId]: true
+      [proposalId]: true
     }));
     showToast('Confidential vote cast successfully!');
   };
@@ -207,6 +227,22 @@ function App() {
       return p;
     }));
     showToast('Proposal resolved successfully!');
+  };
+
+  const handleClaim = async () => {
+    if (!connectedAddress || !window.ethereum) return;
+    setClaimLoading(true);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const tx = await claimZamaDaoTokens(signer);
+      await tx.wait();
+      showToast('Successfully claimed 30 ZAMADAO tokens!');
+      setClaimed(30n * 10n ** 18n);
+    } catch (e: any) {
+      showToast(e?.reason || e?.message || 'Claim failed');
+    }
+    setClaimLoading(false);
   };
 
   // Update proposal statuses based on current time
@@ -243,6 +279,13 @@ function App() {
             
             <div className="flex items-center gap-4">
               <ThemeToggle />
+              <button
+                className="px-4 py-2 rounded-lg font-bold bg-yellow-400 text-black shadow hover:bg-yellow-300 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={!connectedAddress || claimLoading || claimed >= 30n * 10n ** 18n}
+                onClick={handleClaim}
+              >
+                {claimLoading ? 'Claiming...' : claimed >= 30n * 10n ** 18n ? 'Claimed' : 'Claim ZAMADAO'}
+              </button>
               <ConnectButton showBalance={false} />
             </div>
           </div>
@@ -256,7 +299,7 @@ function App() {
             proposal={selectedProposal}
             onBack={() => setSelectedProposalId(null)}
             onShare={handleShareProposal}
-            onCastVote={handleCastVote}
+            onCastVote={(voteType, votingPower) => handleCastVote(selectedProposal.id, voteType, votingPower)}
             onResolve={handleResolveProposal}
             userVoted={userVotes[selectedProposal.id] || false}
           />
