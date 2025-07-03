@@ -13,8 +13,8 @@ import type { HardhatUserConfig } from "hardhat/config";
 import { vars } from "hardhat/config";
 
 // Hardcoded mnemonic and Sepolia RPC URL
-const MNEMONIC: string = vars.get("MNEMONIC", "play cement much paper mandate rubber marble ketchup over wonder critic survey");
-const SEPOLIA_RPC_URL: string = "https://eth-sepolia.g.alchemy.com/v2/q3ShnpnR_M3lmo97AfaTOgdQXSOjNkml";
+const MNEMONIC: string = vars.get("MNEMONIC", "play cement much paper mandate rubber marble ");
+const SEPOLIA_RPC_URL: string = "https://eth-sepolia.g.alchemy.com/v2/q3ShnpnR_M3lmo9SOjNkml";
 
 const config: HardhatUserConfig = {
   defaultNetwork: "hardhat",
