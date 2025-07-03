@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield } from 'lucide-react';
+import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle } from 'lucide-react';
 import { Proposal, ProposalStatus, VoteType } from '../types/proposal';
 import StatusBadge from './StatusBadge';
 import ProgressTimeline from './ProgressTimeline';
@@ -42,6 +42,8 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const isCreator = connectedAddress && proposal.creator && connectedAddress.toLowerCase() === proposal.creator.toLowerCase();
   const [isResolving, setIsResolving] = useState(false);
   const [votes, setVotes] = useState<any[]>([]);
+  const [userVotingPower, setUserVotingPower] = useState<number | null>(null);
+  const [checkingVotingPower, setCheckingVotingPower] = useState(false);
 
   const canVote = proposal.status === ProposalStatus.Active && !hasUserVoted;
   const canResolve = proposal.status === ProposalStatus.Reveal && !revealRequested;
@@ -226,6 +228,39 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
     getVotesForProposal(proposal.id).then(setVotes);
   }, [proposal.id]);
 
+  useEffect(() => {
+    // Fetch user's voting power (ERC20 balance)
+    const fetchVotingPower = async () => {
+      if (!connectedAddress || !proposal.token) {
+        setUserVotingPower(null);
+        return;
+      }
+      setCheckingVotingPower(true);
+      try {
+        let provider;
+        if (window.ethereum) {
+          provider = new ethers.BrowserProvider(window.ethereum);
+        } else {
+          setUserVotingPower(null);
+          return;
+        }
+        const tokenContract = new ethers.Contract(proposal.token, [
+          'function balanceOf(address) view returns (uint256)',
+          'function decimals() view returns (uint8)'
+        ], provider);
+        const balance = await tokenContract.balanceOf(connectedAddress);
+        const decimals = await tokenContract.decimals();
+        const normalizedBalance = Number(ethers.formatUnits(balance, decimals));
+        setUserVotingPower(normalizedBalance);
+      } catch (err) {
+        setUserVotingPower(null);
+      } finally {
+        setCheckingVotingPower(false);
+      }
+    };
+    fetchVotingPower();
+  }, [connectedAddress, proposal.token]);
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
       {/* Header */}
@@ -311,7 +346,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
             <button
               onClick={() => setShowVoteModal(true)}
               className="flex items-center gap-2 px-6 py-3 bg-accent dark:bg-primary text-white rounded-xl hover:bg-accent/90 dark:hover:bg-primary/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg transform hover:scale-105"
-              disabled={!canVote}
+              disabled={!canVote || checkingVotingPower || userVotingPower === 0}
             >
               <Vote size={16} />
               Cast Confidential Vote
@@ -334,6 +369,13 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
           <div className="flex items-center gap-2 mt-4 px-6 py-3 bg-success/10 text-success border border-success/30 rounded-xl w-fit">
             <CheckCircle size={18} />
             <span className="font-medium">You have voted</span>
+          </div>
+        )}
+        {/* Show no voting power message if user has 0 tokens */}
+        {userVotingPower === 0 && (
+          <div className="flex items-center gap-2 mt-4 px-6 py-3 bg-danger/10 text-danger border border-danger/30 rounded-xl w-fit">
+            <AlertCircle size={18} />
+            <span className="font-medium">You have no voting power for this proposal</span>
           </div>
         )}
 
