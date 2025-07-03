@@ -1,0 +1,41 @@
+---
+FHEVM DAO Reveal Flow Explanation
+---
+
+1. What Happens When 'Resolve' is Clicked (Contract Side)
+--------------------------------------------------------
+- The frontend calls the contract's `requestTallyReveal(proposalId)` function.
+- In the contract, this function:
+    - Checks that voting has ended and the proposal is not already resolved.
+    - Collects the encrypted tallies (forVotes, againstVotes, abstainVotes).
+    - Calls `FHE.requestDecryption` with these ciphertexts and the callback selector (`resolveTallyCallback`).
+    - Stores the returned requestId in the proposal struct.
+    - Emits a `TallyRevealRequested` event.
+- This matches the pattern described in the Zama FHEVM Oracle docs: https://docs.zama.ai/protocol/solidity-guides/smart-contract/oracle
+
+2. What the Frontend Does
+-------------------------
+- Shows a 'Resolve' button when the proposal is eligible (voting ended, not resolved).
+- When clicked, calls the contract's `requestTallyReveal` function for the proposal.
+- After the request, the frontend polls or listens for the proposal's `resolved` status.
+- Once `resolved == true`, the frontend displays the plaintext tallies (`revealedFor`, `revealedAgainst`, `revealedAbstain`).
+- The frontend does NOT decrypt the tallies itself; it only reads the results from the contract after the relayer/oracle has fulfilled the request.
+
+3. Why This Should Work
+-----------------------
+- The contract is set up according to the official FHEVM asynchronous decryption pattern.
+- The frontend is following the correct logic: trigger the request, then wait for the contract to update.
+- The relayer/oracle (off-chain service) is responsible for listening to decryption requests, decrypting, and calling the contract's callback with the results.
+
+4. Why It Might Not Be Working Now
+----------------------------------
+- If the proposal remains unresolved (`resolved == false`), it usually means the relayer/oracle has not yet processed the decryption request.
+- This could be because:
+    - The relayer/oracle service is not running or is delayed.
+    - There is a network or configuration issue with the relayer.
+    - The callback was not called or failed.
+- The frontend and contract are set up correctly, but the reveal flow depends on the relayer/oracle fulfilling the request.
+
+---
+Summary: The FE and contract logic are correct per Zama's docs. The missing piece is the relayer/oracle fulfilling the decryption request and calling the contract's callback to resolve the proposal.
+--- 

@@ -128,8 +128,8 @@ function App() {
         setProposals(prev => [
           confirmedProposal,
           ...prev.filter(p => String(p.id) !== String(tempId))
-        ]);
-        showToast('Proposal created successfully!');
+    ]);
+    showToast('Proposal created successfully!');
       } else {
         showToast('Failed to get proposal ID from event');
       }

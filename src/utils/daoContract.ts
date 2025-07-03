@@ -32,7 +32,7 @@ export async function fetchProposalCount(provider: any) {
  */
 export async function fetchProposalById(id: number, provider: any) {
   const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
-  const proposal = await contract.getProposal(id);
+  const proposal = await contract.proposals(id);
   return { id, ...proposal };
 }
 
@@ -48,6 +48,27 @@ export async function fetchAllProposals(provider: any) {
     proposals.push(proposal);
   }
   return proposals;
+}
+
+/**
+ * Check if a reveal has been requested for a proposal.
+ * @param id Proposal ID (index)
+ * @param provider ethers.Signer | ethers.Provider | any
+ */
+export async function isRevealRequested(id: number, provider: any) {
+  const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+  return await contract.isRevealRequested(id);
+}
+
+/**
+ * Check if a user has voted on a proposal.
+ * @param id Proposal ID (index)
+ * @param userAddress address
+ * @param provider ethers.Signer | ethers.Provider | any
+ */
+export async function hasVoted(id: number, userAddress: string, provider: any) {
+  const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+  return await contract.hasVoted(id, userAddress);
 }
 
 // Remove syncProposalsToFirestore and syncProposalsFromEvents logic

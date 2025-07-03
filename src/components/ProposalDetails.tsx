@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield } from 'lucide-react';
 import { Proposal, ProposalStatus, VoteType } from '../types/proposal';
 import StatusBadge from './StatusBadge';
@@ -7,10 +7,12 @@ import CountdownTimer from './CountdownTimer';
 import ConfidentialVoteModal from './ConfidentialVoteModal';
 import { formatDate } from '../utils/time';
 import { getFheInstance } from '../utils/fheInstance';
-import { useWriteContract } from 'wagmi';
-import { DAO_CONTRACT_ADDRESS, DAO_ABI } from '../utils/daoContract';
+import { useWriteContract, useAccount } from 'wagmi';
+import { DAO_CONTRACT_ADDRESS, DAO_ABI, fetchProposalById, isRevealRequested, hasVoted } from '../utils/daoContract';
 import { getAddress } from 'ethers';
 import { hexlify } from 'ethers';
+import { BrowserProvider } from 'ethers';
+import { ethers } from 'ethers';
 
 interface ProposalDetailsProps {
   proposal: Proposal;
@@ -31,9 +33,15 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
 }) => {
   const [showVoteModal, setShowVoteModal] = useState(false);
   const { writeContractAsync } = useWriteContract();
+  const [decryptedTallies, setDecryptedTallies] = useState<{ for: number, against: number, abstain: number } | null>(null);
+  const lastLoggedProposalId = useRef<number | null>(null);
+  const [revealRequested, setRevealRequested] = useState(false);
+  const [hasUserVoted, setHasUserVoted] = useState(userVoted);
+  const { address: connectedAddress } = useAccount();
+  const isCreator = connectedAddress && proposal.creator && connectedAddress.toLowerCase() === proposal.creator.toLowerCase();
 
-  const canVote = proposal.status === ProposalStatus.Active && !userVoted;
-  const canResolve = proposal.status === ProposalStatus.Reveal && !proposal.resolved;
+  const canVote = proposal.status === ProposalStatus.Active && !hasUserVoted;
+  const canResolve = proposal.status === ProposalStatus.Reveal && !proposal.resolved && !revealRequested;
 
   const totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
   const forPercentage = totalVotes > 0 ? (proposal.forVotes / totalVotes) * 100 : 0;
@@ -72,8 +80,27 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
 
       const userAddress = window.ethereum.selectedAddress || (await window.ethereum.request({ method: 'eth_accounts' }))[0];
       console.log('Using user address:', userAddress);
+
+      // Fetch the user's token balance for weighted voting
+      let provider;
+      if (window.ethereum) {
+        provider = new ethers.BrowserProvider(window.ethereum);
+      } else {
+        throw new Error('No Ethereum provider found');
+      }
+      const tokenContract = new ethers.Contract(proposal.token, [
+        'function balanceOf(address) view returns (uint256)',
+        'function decimals() view returns (uint8)'
+      ], provider);
+      const balance = await tokenContract.balanceOf(userAddress);
+      const decimals = await tokenContract.decimals();
+      const normalizedBalance = Number(ethers.formatUnits(balance, decimals));
+      console.log('User token balance (raw):', balance.toString());
+      console.log('User token balance (normalized):', normalizedBalance);
+
+      // Encrypt the normalized balance as the vote value
       const ciphertext = await fhe.createEncryptedInput(contractAddressChecksum, userAddress);
-      ciphertext.add64(voteType); // dev approach: use plain number
+      ciphertext.add64(normalizedBalance);
       const { handles, inputProof } = await ciphertext.encrypt();
       const encryptedHex = hexlify(handles[0]);
       const proofHex = hexlify(inputProof);
@@ -91,11 +118,93 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         gas: BigInt(5_000_000),
       });
 
-      onCastVote(voteType, 1);
+      onCastVote(voteType, normalizedBalance);
     } catch (err) {
       console.error('Error in handleConfidentialVote:', err);
     }
   };
+
+  useEffect(() => {
+    const decryptTallies = async () => {
+      const fhe = getFheInstance();
+      if (!fhe) return;
+
+      let provider;
+      if (window.ethereum) {
+        provider = new BrowserProvider(window.ethereum);
+      } else {
+        console.error('No Ethereum provider found');
+        return;
+      }
+      // Always use the correct on-chain proposal ID
+      const onChainProposal = await fetchProposalById(proposal.id, provider);
+
+      // Try both named and indexed access
+      const handlesNamed = [
+        onChainProposal.forVotes,
+        onChainProposal.againstVotes,
+        onChainProposal.abstainVotes
+      ];
+      const handlesIndexed = [
+        onChainProposal[3], // forVotes
+        onChainProposal[4], // againstVotes
+        onChainProposal[5]  // abstainVotes
+      ];
+      // Use handlesIndexed if handlesNamed are undefined
+      const handles = handlesNamed.every(h => h !== undefined) ? handlesNamed : handlesIndexed;
+
+      // Only log once per proposal ID
+      if (lastLoggedProposalId.current !== proposal.id) {
+        console.log('Decrypting tallies for proposal', proposal.id, 'with handles:', handles);
+        handles.forEach((h, i) => {
+          const len = typeof h === 'string' ? h.length : undefined;
+          console.log(['forVotes', 'againstVotes', 'abstainVotes'][i] + ':', h, 'type:', typeof h, 'length:', len);
+        });
+        lastLoggedProposalId.current = proposal.id;
+      }
+
+      // Only decrypt if they are valid ciphertexts
+      if (handles.every(h => typeof h === 'string' && h.startsWith('0x') && h.length === 66)) {
+        try {
+          const values = await fhe.publicDecrypt(handles);
+          setDecryptedTallies({
+            for: values[handles[0]],
+            against: values[handles[1]],
+            abstain: values[handles[2]]
+          });
+        } catch (err) {
+          console.error('Failed to decrypt tallies:', err);
+        }
+      } else {
+        // Optionally show a message: "Tally not revealed yet"
+      }
+    };
+
+    if (!proposal.resolved) {
+      decryptTallies();
+    }
+  }, [proposal]);
+
+  // Fetch reveal requested and hasVoted state
+  useEffect(() => {
+    const fetchStates = async () => {
+      let provider;
+      if (window.ethereum) {
+        provider = new ethers.BrowserProvider(window.ethereum);
+      } else {
+        return;
+      }
+      // Check if reveal has been requested
+      const reveal = await isRevealRequested(proposal.id, provider);
+      setRevealRequested(reveal);
+      // Check if user has voted
+      const accounts = await provider.send('eth_requestAccounts', []);
+      const userAddress = accounts[0];
+      const voted = await hasVoted(proposal.id, userAddress, provider);
+      setHasUserVoted(voted);
+    };
+    fetchStates();
+  }, [proposal.id]);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
@@ -182,29 +291,31 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
             <button
               onClick={() => setShowVoteModal(true)}
               className="flex items-center gap-2 px-6 py-3 bg-accent dark:bg-primary text-white rounded-xl hover:bg-accent/90 dark:hover:bg-primary/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg transform hover:scale-105"
+              disabled={!canVote}
             >
               <Vote size={16} />
               Cast Confidential Vote
             </button>
           )}
           
-          {canResolve && (
+          {canResolve && isCreator && (
             <button
               onClick={() => onResolve(proposal.id)}
               className="flex items-center gap-2 px-6 py-3 bg-success text-white rounded-xl hover:bg-success/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg transform hover:scale-105"
+              disabled={!canResolve}
             >
               <Settings size={16} />
               Resolve Proposal
             </button>
           )}
-          
-          {userVoted && proposal.status === ProposalStatus.Active && (
-            <div className="flex items-center gap-2 px-6 py-3 bg-success/10 text-success border border-success/30 rounded-xl">
-              <CheckCircle size={16} />
-              <span className="font-medium">Vote Cast Confidentially</span>
-            </div>
-          )}
         </div>
+        {/* Show Voted status if user has voted */}
+        {hasUserVoted && (
+          <div className="flex items-center gap-2 mt-4 px-6 py-3 bg-success/10 text-success border border-success/30 rounded-xl w-fit">
+            <CheckCircle size={18} />
+            <span className="font-medium">You have voted</span>
+          </div>
+        )}
 
         {proposal.status === ProposalStatus.Active && (
           <div className="mt-6 p-4 bg-primary/5 border border-primary/20 rounded-xl">
@@ -267,7 +378,11 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                 <span className="font-medium text-accent dark:text-text-primary-dark text-lg">For</span>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-success">{proposal.forVotes.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-success">
+                  {proposal.resolved
+                    ? proposal.forVotes.toLocaleString()
+                    : decryptedTallies?.for?.toLocaleString() ?? 'Decrypting...'}
+                </div>
                 <div className="text-sm text-text-secondary dark:text-text-secondary-dark">{forPercentage.toFixed(1)}%</div>
               </div>
             </div>
@@ -278,7 +393,11 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                 <span className="font-medium text-accent dark:text-text-primary-dark text-lg">Against</span>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-danger">{proposal.againstVotes.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-danger">
+                  {proposal.resolved
+                    ? proposal.againstVotes.toLocaleString()
+                    : decryptedTallies?.against?.toLocaleString() ?? 'Decrypting...'}
+                </div>
                 <div className="text-sm text-text-secondary dark:text-text-secondary-dark">{againstPercentage.toFixed(1)}%</div>
               </div>
             </div>
@@ -289,7 +408,11 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                 <span className="font-medium text-accent dark:text-text-primary-dark text-lg">Abstain</span>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-abstain">{proposal.abstainVotes.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-abstain">
+                  {proposal.resolved
+                    ? proposal.abstainVotes.toLocaleString()
+                    : decryptedTallies?.abstain?.toLocaleString() ?? 'Decrypting...'}
+                </div>
                 <div className="text-sm text-text-secondary dark:text-text-secondary-dark">{abstainPercentage.toFixed(1)}%</div>
               </div>
             </div>
