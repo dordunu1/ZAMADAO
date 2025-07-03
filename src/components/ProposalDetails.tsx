@@ -71,7 +71,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       .join('');
   }
 
-  const handleConfidentialVote = async (voteType: number) => {
+  const handleConfidentialVote = async (voteType: number, setVoteStep?: React.Dispatch<React.SetStateAction<'idle' | 'encrypting' | 'casting'>>) => {
     try {
       console.log('handleConfidentialVote called');
       const fhe = getFheInstance();
@@ -114,6 +114,8 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         inputProof: proofHex
       });
 
+      // Set voteStep to 'casting' just before MetaMask pops up
+      if (setVoteStep) setVoteStep('casting');
       await writeContractAsync({
         address: contractAddressChecksum,
         abi: DAO_ABI,

@@ -5,7 +5,7 @@ import { VoteType } from '../types/proposal';
 interface ConfidentialVoteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onVote: (voteType: number) => Promise<void>;
+  onVote: (voteType: number, setVoteStep: React.Dispatch<React.SetStateAction<'idle' | 'encrypting' | 'casting'>>) => Promise<void>;
   proposalId: string;
   proposalTitle: string;
   votingPower: number | null;
@@ -22,19 +22,22 @@ const ConfidentialVoteModal: React.FC<ConfidentialVoteModalProps> = ({
   const [selectedVote, setSelectedVote] = useState<VoteType | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [voteStep, setVoteStep] = useState<'idle' | 'encrypting' | 'casting'>('idle');
 
   if (!isOpen) return null;
 
   const handleVote = async (voteType: number) => {
     setLoading(true);
     setError(null);
+    setVoteStep('encrypting');
     try {
-      await onVote(voteType);
+      await onVote(voteType, setVoteStep);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to cast confidential vote');
     } finally {
       setLoading(false);
+      setVoteStep('idle');
     }
   };
 
@@ -158,7 +161,9 @@ const ConfidentialVoteModal: React.FC<ConfidentialVoteModalProps> = ({
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                Casting Vote...
+                {voteStep === 'encrypting' && 'Encrypting...'}
+                {voteStep === 'casting' && 'Casting Vote...'}
+                {voteStep === 'idle' && 'Processing...'}
               </>
             ) : (
               <>
