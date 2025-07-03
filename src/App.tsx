@@ -143,7 +143,7 @@ function App() {
     });
   };
 
-  const handleCastVote = async (voteType: VoteType, weight: number) => {
+  const handleCastVote = async (voteType: VoteType, votingPower: number) => {
     if (!selectedProposalId) {
       console.log('No selectedProposalId!');
       return;
@@ -152,6 +152,7 @@ function App() {
       voter: connectedAddress || '',
       type: voteType === VoteType.For ? 'for' : voteType === VoteType.Against ? 'against' : 'abstain',
       timestamp: Date.now(),
+      votingPower: votingPower,
     };
     console.log('Writing vote for proposal:', selectedProposalId, 'vote:', voteObj);
     await addVote(selectedProposalId, voteObj);

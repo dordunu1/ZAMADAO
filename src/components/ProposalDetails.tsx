@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle, Copy, Link2 } from 'lucide-react';
 import { Proposal, ProposalStatus, VoteType } from '../types/proposal';
 import StatusBadge from './StatusBadge';
 import ProgressTimeline from './ProgressTimeline';
@@ -261,6 +261,11 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
     fetchVotingPower();
   }, [connectedAddress, proposal.token]);
 
+  function truncateAddress(address: string) {
+    if (!address) return '';
+    return address.slice(0, 6) + '...' + address.slice(-4);
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
       {/* Header */}
@@ -291,7 +296,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         <div className="flex flex-wrap items-center gap-6 text-sm text-text-secondary dark:text-text-secondary-dark mb-8">
           <div className="flex items-center gap-2">
             <User size={16} />
-            <span>Created by {proposal.creator}</span>
+            <span>Created by {truncateAddress(proposal.creator)}</span>
           </div>
           <div className="flex items-center gap-2">
             <Clock size={16} />
@@ -300,6 +305,10 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
           <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-xl">
             <Shield size={16} className="text-primary" />
             <span className="text-primary font-medium">Confidential Voting</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1 bg-surface dark:bg-surface-dark rounded-xl border border-zama-light-orange dark:border-border-dark">
+            <Link2 size={16} className="text-primary" />
+            <span className="font-mono">{truncateAddress(proposal.token)}</span>
           </div>
         </div>
 
@@ -484,6 +493,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         onVote={handleConfidentialVote}
         proposalId={proposal.id.toString()}
         proposalTitle={proposal.title}
+        votingPower={userVotingPower}
       />
     </div>
   );

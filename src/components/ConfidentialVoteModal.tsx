@@ -8,6 +8,7 @@ interface ConfidentialVoteModalProps {
   onVote: (voteType: number) => Promise<void>;
   proposalId: string;
   proposalTitle: string;
+  votingPower: number | null;
 }
 
 const ConfidentialVoteModal: React.FC<ConfidentialVoteModalProps> = ({
@@ -15,10 +16,10 @@ const ConfidentialVoteModal: React.FC<ConfidentialVoteModalProps> = ({
   onClose,
   onVote,
   proposalId,
-  proposalTitle
+  proposalTitle,
+  votingPower
 }) => {
   const [selectedVote, setSelectedVote] = useState<VoteType | null>(null);
-  const [weight, setWeight] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,17 +120,13 @@ const ConfidentialVoteModal: React.FC<ConfidentialVoteModalProps> = ({
           </div>
 
           <div>
-            <label htmlFor="weight" className="block text-sm font-medium text-accent dark:text-text-primary-dark mb-2">
+            <label className="block text-sm font-medium text-accent dark:text-text-primary-dark mb-2">
               Vote Weight
             </label>
-            <input
-              type="number"
-              id="weight"
-              min="1"
-              value={weight}
-              onChange={(e) => setWeight(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-full px-3 py-2 border border-zama-light-orange dark:border-border-dark rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white/80 dark:bg-card-dark/80 backdrop-blur-sm text-accent dark:text-text-primary-dark transition-all duration-300"
-            />
+            <div className="w-full px-3 py-2 border border-zama-light-orange dark:border-border-dark rounded-xl bg-white/80 dark:bg-card-dark/80 backdrop-blur-sm text-accent dark:text-text-primary-dark transition-all duration-300 flex items-center gap-2">
+              <Shield className="text-primary" size={16} />
+              <span className="font-mono text-base">{votingPower !== null ? votingPower : '...'}</span>
+            </div>
           </div>
 
           <div className="bg-primary/10 border border-primary/30 rounded-xl p-4">

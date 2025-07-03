@@ -25,6 +25,7 @@ export interface Vote {
   voter: string;
   type: 'for' | 'against' | 'abstain';
   timestamp: number;
+  votingPower?: number;
 }
 
 // Add a new proposal (ID must be provided and unique)
