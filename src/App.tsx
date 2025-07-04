@@ -14,6 +14,7 @@ import { initializeFheInstance } from './utils/fheInstance';
 import { ethers } from 'ethers';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from './firebase';
+import LandingPage from './components/LandingPage';
 
 function App() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
@@ -24,6 +25,7 @@ function App() {
   const { writeContractAsync } = useWriteContract();
   const [claimLoading, setClaimLoading] = useState(false);
   const [claimed, setClaimed] = useState<bigint>(0n);
+  const [showLanding, setShowLanding] = useState(true);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -277,6 +279,10 @@ function App() {
     params.set('proposal', id.toString());
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
   };
+
+  if (showLanding) {
+    return <LandingPage onEnter={() => setShowLanding(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-zama-gradient dark:bg-zama-gradient-dark transition-all duration-300">
