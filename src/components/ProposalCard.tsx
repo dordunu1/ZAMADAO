@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { User, Clock, Shield, Link, ThumbsUp, ThumbsDown, MinusCircle, Users, CheckCircle } from 'lucide-react';
-import { Proposal } from '../types/proposal';
+import { Proposal, ProposalStatus } from '../types/proposal';
 import StatusBadge from './StatusBadge';
 import { formatTimeRemaining, formatDate } from '../utils/time';
 import { getVotesForProposal } from '../utils/firestoreProposals';
 import { useAccount } from 'wagmi';
+import { DAO_CONTRACT_ADDRESS, DAO_ABI } from '../utils/daoContract';
+import { ethers } from 'ethers';
 
 interface ProposalCardProps {
   proposal: Proposal;
@@ -16,6 +18,8 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
   const [voteCount, setVoteCount] = useState(0);
   const [userVote, setUserVote] = useState<any | null>(null);
   const { address: connectedAddress } = useAccount();
+  const [isOnChainResolved, setIsOnChainResolved] = useState(false);
+  const [revealedTallies, setRevealedTallies] = useState<{for: number, against: number, abstain: number} | null>(null);
 
   useEffect(() => {
     getVotesForProposal(proposal.id).then(votes => {
@@ -25,20 +29,28 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
         setUserVote(found || null);
       }
     });
+    // Fetch on-chain resolved state and revealed tallies
+    async function fetchOnChainStatus() {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+        const onChainProposal = await contract.proposals(proposal.id);
+        setIsOnChainResolved(onChainProposal.resolved);
+        if (onChainProposal.resolved) {
+          setRevealedTallies({
+            for: Number(onChainProposal.revealedFor),
+            against: Number(onChainProposal.revealedAgainst),
+            abstain: Number(onChainProposal.revealedAbstain)
+          });
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+    fetchOnChainStatus();
   }, [proposal.id, connectedAddress]);
 
-  const getNextDeadline = () => {
-    const now = Date.now();
-    if (now < proposal.votingDeadline) {
-      return { label: 'Voting ends', deadline: proposal.votingDeadline };
-    }
-    if (now < proposal.resolutionDeadline) {
-      return { label: 'Resolution deadline', deadline: proposal.resolutionDeadline };
-    }
-    return null;
-  };
-
-  const nextDeadline = getNextDeadline();
+  const effectiveStatus: ProposalStatus = isOnChainResolved ? ProposalStatus.Closed : proposal.status;
   const totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
 
   function truncateAddress(address: string) {
@@ -49,7 +61,7 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
   return (
     <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-xl p-6 hover:shadow-zama-lg transition-all duration-300 animate-fade-in transform hover:scale-[1.02]">
       <div className="flex flex-row items-center gap-2 mb-2">
-        <StatusBadge status={proposal.status} size="sm" />
+        <StatusBadge status={effectiveStatus} size="sm" />
         {proposal.quorum && (
           <div className="flex flex-row items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-md text-xs font-medium whitespace-nowrap">
             <Users size={14} />
@@ -98,28 +110,28 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
         {proposal.description.replace(/#{1,6}\s/g, '').substring(0, 150)}...
       </p>
 
-      {proposal.resolved && totalVotes > 0 && (
+      {isOnChainResolved && revealedTallies && (
         <div className="grid grid-cols-3 gap-4 mb-4 p-3 bg-surface dark:bg-surface-dark rounded-xl">
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 text-success mb-1">
               <ThumbsUp size={14} />
               <span className="text-sm font-semibold">For</span>
             </div>
-            <div className="text-lg font-bold text-success">{proposal.forVotes.toLocaleString()}</div>
+            <div className="text-lg font-bold text-success">{revealedTallies.for.toLocaleString()}</div>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 text-danger mb-1">
               <ThumbsDown size={14} />
               <span className="text-sm font-semibold">Against</span>
             </div>
-            <div className="text-lg font-bold text-danger">{proposal.againstVotes.toLocaleString()}</div>
+            <div className="text-lg font-bold text-danger">{revealedTallies.against.toLocaleString()}</div>
           </div>
           <div className="text-center">
             <div className="flex items-center justify-center gap-1 text-abstain mb-1">
               <MinusCircle size={14} />
               <span className="text-sm font-semibold">Abstain</span>
             </div>
-            <div className="text-lg font-bold text-abstain">{proposal.abstainVotes.toLocaleString()}</div>
+            <div className="text-lg font-bold text-abstain">{revealedTallies.abstain.toLocaleString()}</div>
           </div>
         </div>
       )}

@@ -6,7 +6,7 @@ import ProgressTimeline from './ProgressTimeline';
 import CountdownTimer from './CountdownTimer';
 import ConfidentialVoteModal from './ConfidentialVoteModal';
 import { formatDate } from '../utils/time';
-import { getFheInstance } from '../utils/fheInstance';
+import { getFheInstance, } from '../utils/fheInstance';
 import { useWriteContract, useAccount } from 'wagmi';
 import { DAO_CONTRACT_ADDRESS, DAO_ABI, fetchProposalById, isRevealRequested, hasVoted } from '../utils/daoContract';
 import { getAddress } from 'ethers';
@@ -46,9 +46,13 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const [checkingVotingPower, setCheckingVotingPower] = useState(false);
   const [tokenSymbol, setTokenSymbol] = useState<string | null>(null);
   const [symbolLoading, setSymbolLoading] = useState(false);
+  // Determine resolved state from on-chain proposal
+  const [isOnChainResolved, setIsOnChainResolved] = useState(false);
+  // Use on-chain resolved state for status
+  const effectiveStatus = isOnChainResolved ? ProposalStatus.Closed : proposal.status;
 
-  const canVote = proposal.status === ProposalStatus.Active && !hasUserVoted;
-  const canResolve = proposal.status === ProposalStatus.Reveal && !revealRequested;
+  const canVote = effectiveStatus === ProposalStatus.Active && !hasUserVoted;
+  const canResolve = effectiveStatus === ProposalStatus.Reveal && !revealRequested;
 
   const totalVotes = votes.length;
   const confidentialVotes = votes.length; // All votes are confidential in this system
@@ -136,65 +140,26 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const isProposalResolved = revealRequested;
 
   useEffect(() => {
-    const decryptTallies = async () => {
-      const fhe = getFheInstance();
-      if (!fhe) return;
-
-      let provider;
-      if (window.ethereum) {
-        provider = new BrowserProvider(window.ethereum);
-      } else {
-        console.error('No Ethereum provider found');
-        return;
-      }
-      // Always use the correct on-chain proposal ID
-      const onChainProposal = await fetchProposalById(proposal.id, provider);
-
-      // Try both named and indexed access
-      const handlesNamed = [
-        onChainProposal.forVotes,
-        onChainProposal.againstVotes,
-        onChainProposal.abstainVotes
-      ];
-      const handlesIndexed = [
-        onChainProposal[3], // forVotes
-        onChainProposal[4], // againstVotes
-        onChainProposal[5]  // abstainVotes
-      ];
-      // Use handlesIndexed if handlesNamed are undefined
-      const handles = handlesNamed.every(h => h !== undefined) ? handlesNamed : handlesIndexed;
-
-      // Only log once per proposal ID
-      if (lastLoggedProposalId.current !== proposal.id) {
-        console.log('Decrypting tallies for proposal', proposal.id, 'with handles:', handles);
-        handles.forEach((h, i) => {
-          const len = typeof h === 'string' ? h.length : undefined;
-          console.log(['forVotes', 'againstVotes', 'abstainVotes'][i] + ':', h, 'type:', typeof h, 'length:', len);
-        });
-        lastLoggedProposalId.current = proposal.id;
-      }
-
-      // Only decrypt if they are valid ciphertexts
-      if (handles.every(h => typeof h === 'string' && h.startsWith('0x') && h.length === 66)) {
-        try {
-          const values = await fhe.publicDecrypt(handles);
+    async function fetchRevealedTallies() {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+        const onChainProposal = await contract.proposals(proposal.id);
+        setIsOnChainResolved(onChainProposal.resolved);
+        if (onChainProposal.resolved) {
           setDecryptedTallies({
-            for: values[handles[0]],
-            against: values[handles[1]],
-            abstain: values[handles[2]]
+            for: Number(onChainProposal.revealedFor),
+            against: Number(onChainProposal.revealedAgainst),
+            abstain: Number(onChainProposal.revealedAbstain)
           });
-        } catch (err) {
-          console.error('Failed to decrypt tallies:', err);
         }
-      } else {
-        // Optionally show a message: "Tally not revealed yet"
+      } catch (err) {
+        console.error('[fetchRevealedTallies] Error:', err);
       }
-    };
-
-    if (isProposalResolved) {
-      decryptTallies();
     }
-  }, [proposal, isProposalResolved]);
+    console.log('[ProposalDetails] useEffect running for proposal:', proposal.id);
+    fetchRevealedTallies();
+  }, [proposal.id]);
 
   // Fetch reveal requested and hasVoted state
   useEffect(() => {
@@ -312,7 +277,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
           <span>Back to Dashboard</span>
         </button>
         <div className="flex items-center gap-3">
-          <StatusBadge status={proposal.status} />
+          <StatusBadge status={effectiveStatus} />
           <button
             onClick={() => onShare(proposal.id)}
             className="flex items-center gap-2 px-3 py-2 text-text-secondary dark:text-text-secondary-dark border border-zama-light-orange dark:border-border-dark rounded-xl hover:bg-white dark:hover:bg-surface-dark transition-all duration-300"
@@ -361,27 +326,29 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-2xl p-8 shadow-zama">
         <h2 className="text-xl font-semibold mb-8 text-accent dark:text-text-primary-dark">Voting Timeline</h2>
         <ProgressTimeline
-          status={proposal.status}
+          status={effectiveStatus}
           votingDeadline={proposal.votingDeadline}
           resolutionDeadline={proposal.resolutionDeadline}
-          resolved={isProposalResolved}
+          resolved={decryptedTallies !== null}
         />
-        
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {proposal.status === ProposalStatus.Active && (
+          {effectiveStatus === ProposalStatus.Active && (
             <CountdownTimer
               targetDate={proposal.votingDeadline}
               label="Voting ends"
               className="text-primary"
             />
           )}
-          {proposal.status === ProposalStatus.Reveal && (
+          {/* Remove the resolution deadline timer/countdown after proposal is resolved */}
+          {/*
+          {proposal.status === ProposalStatus.Reveal && !decryptedTallies && (
             <CountdownTimer
               targetDate={proposal.resolutionDeadline}
               label="Resolution deadline"
               className="text-warning"
             />
           )}
+          */}
         </div>
       </div>
 
@@ -427,7 +394,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
           </div>
         )}
 
-        {proposal.status === ProposalStatus.Active && (
+        {effectiveStatus === ProposalStatus.Active && (
           <div className="mt-6 p-4 bg-primary/5 border border-primary/20 rounded-xl">
             <div className="flex items-start gap-3">
               <Shield className="text-primary flex-shrink-0 mt-1" size={20} />
