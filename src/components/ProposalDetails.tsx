@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle, Copy, Link2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle, Copy, Link2, Loader2, BarChart2 } from 'lucide-react';
 import { Proposal, ProposalStatus, VoteType } from '../types/proposal';
 import StatusBadge from './StatusBadge';
 import ProgressTimeline from './ProgressTimeline';
@@ -14,6 +14,7 @@ import { hexlify } from 'ethers';
 import { BrowserProvider } from 'ethers';
 import { ethers } from 'ethers';
 import { getVotesForProposal } from '../utils/firestoreProposals';
+import VotersLeaderboard from './VotersLeaderboard';
 
 interface ProposalDetailsProps {
   proposal: Proposal;
@@ -50,6 +51,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const [isOnChainResolved, setIsOnChainResolved] = useState(false);
   // Use on-chain resolved state for status
   const effectiveStatus = isOnChainResolved ? ProposalStatus.Closed : proposal.status;
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
 
   const canVote = effectiveStatus === ProposalStatus.Active && !hasUserVoted;
   const canResolve = effectiveStatus === ProposalStatus.Reveal && !revealRequested;
@@ -153,9 +155,9 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
             abstain: Number(onChainProposal.revealedAbstain)
           });
         }
-      } catch (err) {
+        } catch (err) {
         console.error('[fetchRevealedTallies] Error:', err);
-      }
+        }
     }
     console.log('[ProposalDetails] useEffect running for proposal:', proposal.id);
     fetchRevealedTallies();
@@ -264,6 +266,8 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
     if (!address) return '';
     return address.slice(0, 6) + '...' + address.slice(-4);
   }
+
+  const votesSafe = Array.isArray(votes) ? votes : [];
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
@@ -427,7 +431,32 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
             <div className="text-sm text-text-secondary dark:text-text-secondary-dark mt-1">Privacy Rate</div>
           </div>
         </div>
+        <div className="mt-6 flex justify-end">
+          <button
+            className="px-5 py-2 bg-accent text-white rounded-xl hover:bg-accent/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg flex items-center gap-2"
+            onClick={() => setShowAnalyticsModal(true)}
+          >
+            <BarChart2 size={18} />
+            Analytics
+          </button>
+        </div>
       </div>
+
+      {/* Analytics Modal */}
+      {showAnalyticsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-card-dark rounded-2xl p-8 max-w-2xl w-full relative shadow-lg">
+            <button
+              className="absolute top-4 right-4 text-xl text-gray-400 hover:text-accent"
+              onClick={() => setShowAnalyticsModal(false)}
+              aria-label="Close"
+            >
+              &times;
+            </button>
+            <VotersLeaderboard votes={votesSafe} />
+          </div>
+        </div>
+      )}
 
       {/* Results */}
       {(isProposalResolved || totalVotes > 0) && (

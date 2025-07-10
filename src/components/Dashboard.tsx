@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusCircle, Filter, Search, List, Grid } from 'lucide-react';
+import { PlusCircle, Filter, Search, List, Grid, BookOpen } from 'lucide-react';
 import { Proposal, ProposalStatus } from '../types/proposal';
 import ProposalCard from './ProposalCard';
 import CreateProposalModal from './CreateProposalModal';
@@ -173,6 +173,18 @@ const Dashboard: React.FC<DashboardProps> = ({
         onClose={() => setShowCreateModal(false)}
         onSubmit={onCreateProposal}
       />
+
+      {/* Floating Docs Link */}
+      <a
+        href="https://buidlingapps.gitbook.io/zamadao"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-xl shadow-lg hover:bg-accent transition-all duration-300 font-medium"
+        style={{ boxShadow: '0 4px 24px 0 rgba(0,0,0,0.10)' }}
+      >
+        <BookOpen size={20} />
+        Read the docs
+      </a>
     </div>
   );
 };

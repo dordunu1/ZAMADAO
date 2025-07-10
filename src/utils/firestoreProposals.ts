@@ -51,8 +51,14 @@ export async function addVote(proposalId: number, vote: Vote) {
 }
 
 // Get all votes for a proposal
-export async function getVotesForProposal(proposalId: number): Promise<Vote[]> {
+export async function getVotesForProposal(proposalId: number): Promise<{ address: string; timestamp: number }[]> {
   const votesCol = collection(db, 'proposals', proposalId.toString(), 'votes');
   const snapshot = await getDocs(votesCol);
-  return snapshot.docs.map(doc => doc.data() as Vote);
+  return snapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      address: data.address || data.voter || '',
+      timestamp: data.committedAt || data.timestamp || 0,
+    };
+  });
 } 
