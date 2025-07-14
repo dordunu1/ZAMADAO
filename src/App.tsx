@@ -178,7 +178,6 @@ function App() {
 
   const handleCastVote = async (proposalId: number, voteType: VoteType, votingPower: number) => {
     if (proposalId === undefined || proposalId === null) {
-      console.log('No proposalId!');
       return;
     }
     let type: 'for' | 'against' | 'abstain';
@@ -191,7 +190,6 @@ function App() {
       timestamp: Date.now(),
       votingPower: votingPower,
     };
-    console.log('Writing vote for proposal:', proposalId, 'vote:', voteObj);
     await addVote(proposalId, voteObj);
     setProposals(prev => prev.map(p => 
       p.id === proposalId 

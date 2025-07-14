@@ -9,6 +9,7 @@ import { formatDate } from '../utils/time';
 import { getFheInstance, decryptValue } from '../utils/fheInstance';
 import { useWriteContract, useAccount } from 'wagmi';
 import { DAO_CONTRACT_ADDRESS, DAO_ABI, fetchRevealedTallies } from '../utils/daoContract';
+import { Contract } from 'ethers';
 import { getAddress } from 'ethers';
 import { hexlify } from 'ethers';
 import { BrowserProvider } from 'ethers';
@@ -49,6 +50,24 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const [symbolLoading, setSymbolLoading] = useState(false);
   // Determine resolved state from on-chain proposal
   const [isOnChainResolved, setIsOnChainResolved] = useState(false);
+  // On-chain hasVoted check
+  useEffect(() => {
+    async function checkHasVoted() {
+      if (!connectedAddress || proposal.id === undefined) {
+        setHasUserVoted(false);
+        return;
+      }
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+        const voted = await contract.hasVoted(proposal.id, connectedAddress);
+        setHasUserVoted(voted);
+      } catch (err) {
+        setHasUserVoted(false);
+      }
+    }
+    checkHasVoted();
+  }, [connectedAddress, proposal.id]);
   // Use on-chain resolved state for status
   const effectiveStatus = isOnChainResolved ? ProposalStatus.Closed : proposal.status;
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
