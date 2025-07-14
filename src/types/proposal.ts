@@ -1,6 +1,6 @@
 export enum VoteType {
-  For = 0,
-  Against = 1,
+  Against = 0,
+  For = 1,
   Abstain = 2
 }
 

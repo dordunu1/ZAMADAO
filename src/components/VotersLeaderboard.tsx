@@ -5,7 +5,7 @@ import { CheckCircle } from 'lucide-react';
 
 // DiceBear Avatars API
 const getDiceBearAvatar = (address: string) =>
-  `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`;
+  `https://api.dicebear.com/7.x/pixel-art/svg?seed=${address}`;
 
 interface Vote {
   address: string;

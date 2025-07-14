@@ -24,7 +24,7 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClo
   const [votingEndTime, setVotingEndTime] = useState(defaultVotingEnd.toTimeString().slice(0, 5));
 
   // Hardcoded for now; ideally this would be fetched from the contract
-  const proposalFeeEth = 0.2;
+  const proposalFeeEth = 0.002
 
   if (!isOpen) return null;
 
@@ -87,7 +87,7 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClo
         <div className="flex justify-center mt-2">
           <span className="flex items-center gap-2 bg-yellow-300 text-black font-semibold px-3 py-1 rounded-full shadow border border-yellow-400 text-sm">
             <BadgeDollarSign className="text-black" size={16} />
-            Proposal Creation Fee: {proposalFeeEth} ETH
+            Proposal Creation Fee: 0.002 ETH
           </span>
         </div>
 

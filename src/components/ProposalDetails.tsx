@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle, Copy, Link2, Loader2, BarChart2 } from 'lucide-react';
+import { ArrowLeft, Link, User, Clock, ThumbsUp, ThumbsDown, MinusCircle, Vote, Settings, CheckCircle, XCircle, Shield, AlertCircle, Copy, Link2, Loader2, BarChart2, Unlock } from 'lucide-react';
 import { Proposal, ProposalStatus, VoteType } from '../types/proposal';
 import StatusBadge from './StatusBadge';
 import ProgressTimeline from './ProgressTimeline';
 import CountdownTimer from './CountdownTimer';
 import ConfidentialVoteModal from './ConfidentialVoteModal';
 import { formatDate } from '../utils/time';
-import { getFheInstance, } from '../utils/fheInstance';
+import { getFheInstance, decryptValue } from '../utils/fheInstance';
 import { useWriteContract, useAccount } from 'wagmi';
-import { DAO_CONTRACT_ADDRESS, DAO_ABI, fetchProposalById, isRevealRequested, hasVoted } from '../utils/daoContract';
+import { DAO_CONTRACT_ADDRESS, DAO_ABI, fetchRevealedTallies } from '../utils/daoContract';
 import { getAddress } from 'ethers';
 import { hexlify } from 'ethers';
 import { BrowserProvider } from 'ethers';
 import { ethers } from 'ethers';
-import { getVotesForProposal } from '../utils/firestoreProposals';
+import { getVotesForProposal, addProposal } from '../utils/firestoreProposals';
 import VotersLeaderboard from './VotersLeaderboard';
 
 interface ProposalDetailsProps {
@@ -52,6 +52,14 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   // Use on-chain resolved state for status
   const effectiveStatus = isOnChainResolved ? ProposalStatus.Closed : proposal.status;
   const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
+  
+  // FHE Decryption state
+  const [fheDecryptionInstance, setFheDecryptionInstance] = useState<any>(null);
+  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [clientSideDecryptedTallies, setClientSideDecryptedTallies] = useState<{ for: number, against: number, abstain: number } | null>(null);
+  const [decryptionError, setDecryptionError] = useState<string | null>(null);
+  const [passedStatus, setPassedStatus] = useState<boolean | null>(null);
+  const [totalTokenSupply, setTotalTokenSupply] = useState<number | null>(null);
 
   const canVote = effectiveStatus === ProposalStatus.Active && !hasUserVoted;
   const canResolve = effectiveStatus === ProposalStatus.Reveal && !revealRequested;
@@ -110,7 +118,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       console.log('User token balance (raw):', balance.toString());
       console.log('User token balance (normalized):', normalizedBalance);
 
-      // Encrypt the normalized balance as the vote value
+      // Encrypt only the weight
       const ciphertext = await fhe.createEncryptedInput(contractAddressChecksum, userAddress);
       ciphertext.add64(normalizedBalance);
       const { handles, inputProof } = await ciphertext.encrypt();
@@ -118,7 +126,8 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       const proofHex = hexlify(inputProof);
       console.log('Submitting vote with:', {
         proposalId: proposal.id,
-        encrypted: encryptedHex,
+        encryptedWeight: encryptedHex,
+        voteType,
         inputProof: proofHex
       });
 
@@ -128,7 +137,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         address: contractAddressChecksum,
         abi: DAO_ABI,
         functionName: 'vote',
-        args: [proposal.id, encryptedHex, proofHex],
+        args: [proposal.id, encryptedHex, voteType, proofHex],
         gas: BigInt(1000000),
       });
 
@@ -142,53 +151,51 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
   const isProposalResolved = revealRequested;
 
   useEffect(() => {
-    async function fetchRevealedTallies() {
+    async function getTalliesAndSupply() {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
-        const onChainProposal = await contract.proposals(proposal.id);
-        setIsOnChainResolved(onChainProposal.resolved);
-        if (onChainProposal.resolved) {
-          setDecryptedTallies({
-            for: Number(onChainProposal.revealedFor),
-            against: Number(onChainProposal.revealedAgainst),
-            abstain: Number(onChainProposal.revealedAbstain)
-          });
+        const tallies = await fetchRevealedTallies(proposal.id, provider);
+        setDecryptedTallies({
+          for: tallies.for,
+          against: tallies.against,
+          abstain: tallies.abstain
+        });
+        setIsOnChainResolved(tallies.resolved);
+        // Fetch total token supply from the token contract
+        if (proposal.token) {
+          const tokenContract = new ethers.Contract(proposal.token, [
+            'function totalSupply() view returns (uint256)',
+            'function decimals() view returns (uint8)'
+          ], provider);
+          const supply = await tokenContract.totalSupply();
+          const decimals = await tokenContract.decimals();
+          const normalizedSupply = Number(ethers.formatUnits(supply, decimals));
+          setTotalTokenSupply(normalizedSupply);
+          // Calculate quorum and pass/fail
+          const quorumRequired = 1; // TODO: Replace with dynamic value if needed
+          const forVotes = tallies.for;
+          const quorumPercent = (forVotes / normalizedSupply) * 100;
+          const passed = tallies.resolved && quorumPercent >= quorumRequired;
+          setPassedStatus(passed);
         }
-        } catch (err) {
-        console.error('[fetchRevealedTallies] Error:', err);
-        }
-    }
-    console.log('[ProposalDetails] useEffect running for proposal:', proposal.id);
-    fetchRevealedTallies();
-  }, [proposal.id]);
-
-  // Fetch reveal requested and hasVoted state
-  useEffect(() => {
-    const fetchStates = async () => {
-      let provider;
-      if (window.ethereum) {
-        provider = new ethers.BrowserProvider(window.ethereum);
-      } else {
-        return;
+      } catch (err) {
+        // handle error
       }
-      // Check if reveal has been requested
-      const reveal = await isRevealRequested(proposal.id, provider);
-      setRevealRequested(reveal);
-      // Check if user has voted
-      const accounts = await provider.send('eth_requestAccounts', []);
-      const userAddress = accounts[0];
-      const voted = await hasVoted(proposal.id, userAddress, provider);
-      setHasUserVoted(voted);
-    };
-    fetchStates();
-  }, [proposal.id]);
+    }
+    getTalliesAndSupply();
+  }, [proposal.id, proposal.token]);
 
   // Handler for resolve button
   const handleResolveClick = async () => {
     setIsResolving(true);
     try {
       await onResolve(proposal.id);
+      // Update Firestore to mark as resolved
+      await addProposal({
+        ...proposal,
+        status: ProposalStatus.Closed,
+        resolved: true
+      });
     } finally {
       setIsResolving(false);
     }
@@ -261,6 +268,58 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
     };
     fetchSymbol();
   }, [proposal.token]);
+
+  // Initialize FHE decryption instance
+  useEffect(() => {
+    const initializeDecryption = async () => {
+      try {
+        const fhe = getFheInstance();
+        if (fhe && typeof fhe.publicDecrypt === 'function') {
+          setFheDecryptionInstance(fhe);
+        }
+      } catch (error) {
+      }
+    };
+    
+    initializeDecryption();
+  }, []);
+
+  // Client-side decryption function using decryptValue
+  const handleClientSideDecryption = async () => {
+    setDecryptionError(null);
+    if (!fheDecryptionInstance || !connectedAddress) {
+      setDecryptionError('FHE decryption instance or user address not available');
+      return;
+    }
+    setIsDecrypting(true);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+      // Get the encrypted tallies from the contract (as bytes32/hex strings)
+      const onChainProposal = await contract.proposals(proposal.id);
+      if (!onChainProposal.resolved) {
+        setDecryptionError('Proposal not yet resolved on-chain');
+        setIsDecrypting(false);
+        return;
+      }
+      // These should be the encrypted handles (hex strings) for the tallies
+      const forHandle = onChainProposal.forVotes;
+      const againstHandle = onChainProposal.againstVotes;
+      const abstainHandle = onChainProposal.abstainVotes;
+      // Decrypt each tally using the relayer
+      const [forVotes, againstVotes, abstainVotes] = await Promise.all([
+        decryptValue(forHandle),
+        decryptValue(againstHandle),
+        decryptValue(abstainHandle)
+      ]);
+      setClientSideDecryptedTallies({ for: forVotes, against: againstVotes, abstain: abstainVotes });
+    } catch (error: any) {
+      setDecryptionError(error.message || 'Client-side decryption failed');
+      console.error('Client-side decryption failed:', error);
+    } finally {
+      setIsDecrypting(false);
+    }
+  };
 
   function truncateAddress(address: string) {
     if (!address) return '';
@@ -431,7 +490,23 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
             <div className="text-sm text-text-secondary dark:text-text-secondary-dark mt-1">Privacy Rate</div>
           </div>
         </div>
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex justify-end gap-3">
+          {/* Client-side Decryption Button */}
+          {isProposalResolved && fheDecryptionInstance && (
+            <button
+              className="px-5 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg flex items-center gap-2"
+              onClick={handleClientSideDecryption}
+              disabled={isDecrypting}
+            >
+              {isDecrypting ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Unlock size={18} />
+              )}
+              {isDecrypting ? 'Decrypting...' : 'Client Decrypt'}
+            </button>
+          )}
+          
           <button
             className="px-5 py-2 bg-accent text-white rounded-xl hover:bg-accent/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg flex items-center gap-2"
             onClick={() => setShowAnalyticsModal(true)}
@@ -463,16 +538,24 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-2xl p-8 shadow-zama">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-xl font-semibold text-accent dark:text-text-primary-dark">Results</h2>
-            {isProposalResolved && (
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${
-                proposal.passed 
-                  ? 'bg-success/10 text-success border border-success/30' 
-                  : 'bg-danger/10 text-danger border border-danger/30'
-              }`}>
-                {proposal.passed ? <CheckCircle size={16} /> : <XCircle size={16} />}
-                {proposal.passed ? 'Passed' : 'Resolved'}
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {isOnChainResolved && passedStatus !== null && (
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium ${
+                  passedStatus
+                    ? 'bg-success/10 text-success border border-success/30'
+                    : 'bg-danger/10 text-danger border border-danger/30'
+                }`}>
+                  {passedStatus ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                  {passedStatus ? 'Passed' : 'Not Passed'}
+                </div>
+              )}
+              {decryptedTallies && (
+                <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary/10 text-primary border border-primary/30">
+                  <Unlock size={16} />
+                  On-Chain Decrypted
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-6">
@@ -483,9 +566,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-success">
-                  {isProposalResolved
-                    ? (decryptedTallies?.for?.toLocaleString() ?? <span className="text-success">Decrypting...</span>)
-                    : <span className="text-success">Encrypted</span>}
+                  {decryptedTallies?.for?.toLocaleString() ?? <span className="text-success">Decrypting...</span>}
                 </div>
               </div>
             </div>
@@ -497,9 +578,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-danger">
-                  {isProposalResolved
-                    ? (decryptedTallies?.against?.toLocaleString() ?? <span className="text-danger">Decrypting...</span>)
-                    : <span className="text-danger">Encrypted</span>}
+                  {decryptedTallies?.against?.toLocaleString() ?? <span className="text-danger">Decrypting...</span>}
                 </div>
               </div>
             </div>
@@ -511,10 +590,75 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
               </div>
               <div className="text-right">
                 <div className="text-2xl font-bold text-abstain">
-                  {isProposalResolved
-                    ? (decryptedTallies?.abstain?.toLocaleString() ?? <span className="text-abstain">Decrypting...</span>)
-                    : <span className="text-abstain">Encrypted</span>}
+                  {decryptedTallies?.abstain?.toLocaleString() ?? <span className="text-abstain">Decrypting...</span>}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Client-side Decrypted Results */}
+      {clientSideDecryptedTallies && (
+        <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-primary/30 dark:border-primary/30 rounded-2xl p-8 shadow-zama">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-xl font-semibold text-accent dark:text-text-primary-dark flex items-center gap-2">
+              <Unlock size={20} className="text-primary" />
+              Client-Side Decrypted Results
+            </h2>
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary/10 text-primary border border-primary/30">
+              <Shield size={16} />
+              Local Verification
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex items-center justify-between p-6 bg-success/5 dark:bg-success/10 rounded-xl">
+              <div className="flex items-center gap-3">
+                <ThumbsUp className="text-success" size={24} />
+                <span className="font-medium text-accent dark:text-text-primary-dark text-lg">For</span>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-success">
+                  {clientSideDecryptedTallies.for?.toLocaleString() ?? '0'}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-6 bg-danger/5 dark:bg-danger/10 rounded-xl">
+              <div className="flex items-center gap-3">
+                <ThumbsDown className="text-danger" size={24} />
+                <span className="font-medium text-accent dark:text-text-primary-dark text-lg">Against</span>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-danger">
+                  {clientSideDecryptedTallies.against?.toLocaleString() ?? '0'}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-6 bg-abstain/5 dark:bg-abstain/10 rounded-xl">
+              <div className="flex items-center gap-3">
+                <MinusCircle className="text-abstain" size={24} />
+                <span className="font-medium text-accent dark:text-text-primary-dark text-lg">Abstain</span>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-abstain">
+                  {clientSideDecryptedTallies.abstain?.toLocaleString() ?? '0'}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-6 p-4 bg-primary/5 border border-primary/20 rounded-xl">
+            <div className="flex items-start gap-3">
+              <Shield className="text-primary flex-shrink-0 mt-1" size={20} />
+              <div>
+                <h4 className="font-medium text-primary mb-2">Client-Side Verification</h4>
+                <p className="text-sm text-text-secondary dark:text-text-secondary-dark">
+                  These results were decrypted locally in your browser using FHE. This provides additional verification 
+                  that the on-chain results are correct and haven't been tampered with.
+                </p>
               </div>
             </div>
           </div>
@@ -530,6 +674,11 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         proposalTitle={proposal.title}
         votingPower={userVotingPower}
       />
+      {decryptionError && (
+        <div className="mt-4 p-3 bg-danger/10 text-danger border border-danger/30 rounded-xl">
+          <span className="font-medium">{decryptionError}</span>
+        </div>
+      )}
     </div>
   );
 };

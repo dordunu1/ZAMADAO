@@ -88,5 +88,22 @@ export async function getClaimedAmount(address: string, provider: any) {
   return claimed;
 }
 
+/**
+ * Fetch revealed tallies for a proposal from the contract.
+ * @param proposalId Proposal ID (index)
+ * @param provider ethers.Signer | ethers.Provider | any
+ */
+export async function fetchRevealedTallies(proposalId: number, provider: any) {
+  const contract = new ethers.Contract(DAO_CONTRACT_ADDRESS, DAO_ABI, provider);
+  const onChainProposal = await contract.proposals(proposalId);
+  return {
+    for: Number(onChainProposal.revealedFor),
+    against: Number(onChainProposal.revealedAgainst),
+    abstain: Number(onChainProposal.revealedAbstain),
+    resolved: onChainProposal.resolved,
+    // Optionally add .passed if your contract exposes it
+  };
+}
+
 // Remove syncProposalsToFirestore and syncProposalsFromEvents logic
 // ... existing code ... 

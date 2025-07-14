@@ -16,20 +16,20 @@ interface ProposalCardProps {
 
 const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }) => {
   const [voteCount, setVoteCount] = useState(0);
-  const [userVote, setUserVote] = useState<any | null>(null);
+  // Remove Firestore-based userVote
+  const [hasVotedOnChain, setHasVotedOnChain] = useState(false);
+  const [userVotingPower, setUserVotingPower] = useState<string | null>(null);
+  const [tokenSymbol, setTokenSymbol] = useState<string | null>(null);
   const { address: connectedAddress } = useAccount();
   const [isOnChainResolved, setIsOnChainResolved] = useState(false);
   const [revealedTallies, setRevealedTallies] = useState<{for: number, against: number, abstain: number} | null>(null);
+  // Remove on-chain voting power and symbol state
 
   useEffect(() => {
     getVotesForProposal(proposal.id).then(votes => {
       setVoteCount(votes.length);
-      if (connectedAddress) {
-        const found = votes.find(v => v.voter?.toLowerCase() === connectedAddress.toLowerCase());
-        setUserVote(found || null);
-      }
     });
-    // Fetch on-chain resolved state and revealed tallies
+    // Fetch on-chain resolved state, revealed tallies, hasVoted, and voting power
     async function fetchOnChainStatus() {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
@@ -43,12 +43,48 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
             abstain: Number(onChainProposal.revealedAbstain)
           });
         }
+        // On-chain hasVoted check
+        if (proposal.id !== undefined && connectedAddress) {
+          const voted = await contract.hasVoted(proposal.id, connectedAddress);
+          setHasVotedOnChain(voted);
+          // If voted, fetch current voting power and token symbol
+          if (voted && proposal.token) {
+            const tokenContract = new ethers.Contract(proposal.token, [
+              'function balanceOf(address) view returns (uint256)',
+              'function decimals() view returns (uint8)',
+              'function symbol() view returns (string)'
+            ], provider);
+            const [balance, decimals, symbol] = await Promise.all([
+              tokenContract.balanceOf(connectedAddress),
+              tokenContract.decimals(),
+              tokenContract.symbol()
+            ]);
+            const normalized = Number(ethers.formatUnits(balance, decimals));
+            let display = '';
+            if (normalized >= 1e6) {
+              display = (normalized / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 }) + 'M';
+            } else {
+              display = normalized.toLocaleString(undefined, { maximumFractionDigits: 2 });
+            }
+            setUserVotingPower(display);
+            setTokenSymbol(symbol);
+          } else {
+            setUserVotingPower(null);
+            setTokenSymbol(null);
+          }
+        } else {
+          setHasVotedOnChain(false);
+          setUserVotingPower(null);
+          setTokenSymbol(null);
+        }
       } catch (err) {
-        // ignore
+        setHasVotedOnChain(false);
+        setUserVotingPower(null);
+        setTokenSymbol(null);
       }
     }
     fetchOnChainStatus();
-  }, [proposal.id, connectedAddress]);
+  }, [proposal.id, connectedAddress, proposal.token]);
 
   const effectiveStatus: ProposalStatus = isOnChainResolved ? ProposalStatus.Closed : proposal.status;
   const totalVotes = proposal.forVotes + proposal.againstVotes + proposal.abstainVotes;
@@ -58,8 +94,13 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
     return address.slice(0, 6) + '...' + address.slice(-4);
   }
 
+  function truncateTitle(title: string, maxLength: number = 20) {
+    if (!title) return '';
+    return title.length > maxLength ? title.slice(0, maxLength) + '...' : title;
+  }
+
   return (
-    <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-xl p-6 hover:shadow-zama-lg transition-all duration-300 animate-fade-in transform hover:scale-[1.02]">
+    <div className="relative bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-xl p-6 hover:shadow-zama-lg transition-all duration-300 animate-fade-in transform hover:scale-[1.02]">
       <div className="flex flex-row items-center gap-2 mb-2">
         <StatusBadge status={effectiveStatus} size="sm" />
         {proposal.quorum && (
@@ -69,10 +110,18 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
           </div>
         )}
       </div>
+      {/* Absolute link icon in top-right */}
+      <button
+        onClick={() => onShare(proposal.id)}
+        className="absolute top-4 right-4 p-2 text-text-muted dark:text-text-muted-dark hover:text-primary transition-all duration-300 rounded-lg hover:bg-surface dark:hover:bg-surface-dark"
+        title="Share proposal"
+      >
+        <Link size={16} />
+      </button>
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-accent dark:text-text-primary-dark mb-2 line-clamp-2">
-            {proposal.title}
+            {truncateTitle(proposal.title)}
           </h3>
           <div className="flex items-center gap-4 text-sm text-text-secondary dark:text-text-secondary-dark mb-3">
             <div className="flex items-center gap-1">
@@ -80,29 +129,21 @@ const ProposalCard: React.FC<ProposalCardProps> = ({ proposal, onView, onShare }
               <span>{truncateAddress(proposal.creator)}</span>
             </div>
           </div>
-          {userVote && (
+          {/* Show badges if user has voted on-chain */}
+          {hasVotedOnChain && (
             <div className="flex flex-row items-center gap-2 mt-1 whitespace-nowrap">
               <div className="flex items-center gap-1 px-2 py-0.5 bg-success/10 text-success border border-success/20 rounded-md text-xs font-medium whitespace-nowrap">
                 <CheckCircle size={14} />
                 <span>Voted successfully</span>
               </div>
-              {userVote.votingPower !== undefined && (
+              {userVotingPower && tokenSymbol && (
                 <div className="flex items-center gap-1 px-2 py-0.5 bg-success/10 text-success border border-success/20 rounded-md text-xs font-medium whitespace-nowrap">
                   <CheckCircle size={14} />
-                  <span>Voting Power: {Number(userVote.votingPower) >= 1e6 ? (Number(userVote.votingPower)/1e6).toLocaleString(undefined, { maximumFractionDigits: 2 }) + 'M' : Number(userVote.votingPower).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                  <span>Voting Power: {userVotingPower} {tokenSymbol}</span>
                 </div>
               )}
             </div>
           )}
-        </div>
-        <div className="flex flex-col items-end gap-2 ml-4">
-          <button
-            onClick={() => onShare(proposal.id)}
-            className="p-2 text-text-muted dark:text-text-muted-dark hover:text-primary transition-all duration-300 rounded-lg hover:bg-surface dark:hover:bg-surface-dark"
-            title="Share proposal"
-          >
-            <Link size={16} />
-          </button>
         </div>
       </div>
 

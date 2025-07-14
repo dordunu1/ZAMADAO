@@ -112,7 +112,7 @@ function App() {
       abi: DAO_ABI,
       functionName: 'createProposal',
       args: [tokenAddress, durationSeconds],
-      value: ethers.parseEther('0.2'), // Proposal fee, should match contract
+      value: ethers.parseEther('0.002'), // Proposal fee, should match contract
     });
 
     // In the background, poll for the transaction receipt and update Firestore with the real proposalId

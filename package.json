@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@openzeppelin/contracts-confidential": "^0.1.0",
     "@rainbow-me/rainbowkit": "^2.2.8",
     "@tanstack/react-query": "^5.81.5",
     "dotenv": "^17.0.1",
