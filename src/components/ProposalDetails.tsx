@@ -89,17 +89,13 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
 
   const handleConfidentialVote = async (voteType: number, setVoteStep?: React.Dispatch<React.SetStateAction<'idle' | 'encrypting' | 'casting'>>) => {
     try {
-      console.log('handleConfidentialVote called');
       const fhe = getFheInstance();
-      console.log('FHE instance:', fhe);
       if (!fhe) throw new Error('FHE instance not initialized');
 
       // Convert contract address to checksum format and cast to `0x${string}`
       const contractAddressChecksum = getAddress(DAO_CONTRACT_ADDRESS) as `0x${string}`;
-      console.log('Using contract address (checksum):', contractAddressChecksum);
 
       const userAddress = window.ethereum.selectedAddress || (await window.ethereum.request({ method: 'eth_accounts' }))[0];
-      console.log('Using user address:', userAddress);
 
       // Fetch the user's token balance for weighted voting
       let provider;
@@ -115,8 +111,6 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       const balance = await tokenContract.balanceOf(userAddress);
       const decimals = await tokenContract.decimals();
       const normalizedBalance = Number(ethers.formatUnits(balance, decimals));
-      console.log('User token balance (raw):', balance.toString());
-      console.log('User token balance (normalized):', normalizedBalance);
 
       // Encrypt only the weight
       const ciphertext = await fhe.createEncryptedInput(contractAddressChecksum, userAddress);
@@ -124,12 +118,6 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       const { handles, inputProof } = await ciphertext.encrypt();
       const encryptedHex = hexlify(handles[0]);
       const proofHex = hexlify(inputProof);
-      console.log('Submitting vote with:', {
-        proposalId: proposal.id,
-        encryptedWeight: encryptedHex,
-        voteType,
-        inputProof: proofHex
-      });
 
       // Set voteStep to 'casting' just before MetaMask pops up
       if (setVoteStep) setVoteStep('casting');
@@ -389,10 +377,10 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-2xl p-8 shadow-zama">
         <h2 className="text-xl font-semibold mb-8 text-accent dark:text-text-primary-dark">Voting Timeline</h2>
         <ProgressTimeline
-          status={effectiveStatus}
+          status={isOnChainResolved ? ProposalStatus.Closed : proposal.status}
           votingDeadline={proposal.votingDeadline}
           resolutionDeadline={proposal.resolutionDeadline}
-          resolved={decryptedTallies !== null}
+          resolved={isOnChainResolved}
         />
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
           {effectiveStatus === ProposalStatus.Active && (
