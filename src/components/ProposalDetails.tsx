@@ -408,7 +408,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
         <h2 className="text-xl font-semibold mb-6 text-accent dark:text-text-primary-dark">Voting Actions</h2>
         
         <div className="flex flex-wrap gap-4">
-          {canVote && (
+          {!hasUserVoted && canVote && (
             <button
               onClick={() => setShowVoteModal(true)}
               className="flex items-center gap-2 px-6 py-3 bg-accent dark:bg-primary text-white rounded-xl hover:bg-accent/90 dark:hover:bg-primary/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg transform hover:scale-105"

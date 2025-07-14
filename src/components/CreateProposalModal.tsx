@@ -83,14 +83,6 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ isOpen, onClo
           </button>
         </div>
 
-        {/* Creation Fee Badge */}
-        <div className="flex justify-center mt-2">
-          <span className="flex items-center gap-2 bg-yellow-300 text-black font-semibold px-3 py-1 rounded-full shadow border border-yellow-400 text-sm">
-            <BadgeDollarSign className="text-black" size={16} />
-            Proposal Creation Fee: 0.002 ETH
-          </span>
-        </div>
-
         <form onSubmit={handleSubmit} className="flex flex-col h-full">
           <div className="flex-1 overflow-auto">
             <div className="p-4 space-y-4">
@@ -254,30 +246,36 @@ Explain the benefits to the DAO."
           </div>
 
           <div className="flex justify-end gap-3 p-4 border-t border-zama-light-orange dark:border-border-dark bg-surface/50 dark:bg-surface-dark/50 backdrop-blur-sm mt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-text-secondary dark:text-text-secondary-dark border border-zama-light-orange dark:border-border-dark rounded-xl hover:bg-white dark:hover:bg-card-dark transition-all duration-300"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 px-6 py-3 bg-accent dark:bg-primary text-white rounded-xl hover:bg-accent/90 dark:hover:bg-primary/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <PlusCircle size={16} />
-                  Create Proposal
-                </>
-              )}
-            </button>
+            <div className="flex flex-row items-center gap-4 w-full">
+              <span className="flex items-center gap-2 bg-yellow-300 text-black font-semibold px-3 py-1 rounded-full shadow border border-yellow-400 text-sm">
+                <BadgeDollarSign className="text-black" size={16} />
+                Creation Fee: 0.002 ETH
+              </span>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-text-secondary dark:text-text-secondary-dark border border-zama-light-orange dark:border-border-dark rounded-xl hover:bg-white dark:hover:bg-card-dark transition-all duration-300 ml-auto"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex items-center gap-2 px-6 py-3 bg-accent dark:bg-primary text-white rounded-xl hover:bg-accent/90 dark:hover:bg-primary/90 transition-all duration-300 font-medium shadow-zama hover:shadow-zama-lg transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle size={16} />
+                    Create Proposal
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
 
