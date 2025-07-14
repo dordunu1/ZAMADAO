@@ -362,7 +362,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
       <div className="bg-white/90 dark:bg-card-dark/90 backdrop-blur-sm border border-zama-light-orange dark:border-border-dark rounded-2xl p-8 shadow-zama">
         <h1 className="text-3xl font-bold text-accent dark:text-text-primary-dark mb-6">{proposal.title}</h1>
         
-        <div className="flex flex-wrap items-center gap-6 text-sm text-text-secondary dark:text-text-secondary-dark mb-8">
+        <div className="flex flex-nowrap items-center gap-3 text-xs text-text-secondary dark:text-text-secondary-dark mb-6">
           <div className="flex items-center gap-2">
             <User size={16} />
             <span>Created by {truncateAddress(proposal.creator)}</span>
@@ -371,11 +371,11 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
             <Clock size={16} />
             <span>{formatDate(proposal.createdAt)}</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-xl">
+          <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 rounded-xl">
             <Shield size={16} className="text-primary" />
             <span className="text-primary font-medium">Confidential Voting</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-surface dark:bg-surface-dark rounded-xl border border-zama-light-orange dark:border-border-dark">
+          <div className="flex items-center gap-1 px-2 py-0.5 bg-surface dark:bg-surface-dark rounded-xl border border-zama-light-orange dark:border-border-dark">
             <Link2 size={16} className="text-primary" />
             <span className="font-mono">{truncateAddress(proposal.token)}</span>
             {symbolLoading ? (
