@@ -4,6 +4,8 @@
 
 [Live Demo](https://zamadao.netlify.app/)
 
+[Documentation (GitBook)](https://buidlingapps.gitbook.io/zamadao)
+
 ---
 
 ## Overview
