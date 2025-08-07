@@ -132,7 +132,7 @@ contract ConfidentialDAO is SepoliaConfig {
         bytes[] memory signatures
     ) external {
         emit DebugCallbackStep("callback_entered", 0);
-        // FHE.checkSignatures(requestId, signatures); // Uncomment for production
+        FHE.checkSignatures(requestId, signatures); // Signature verification for security
         uint256 proposalId = proposalIndexByRequestId[requestId];
         emit DebugCallbackStep("proposal_found", proposalId);
         Proposal storage prop = proposals[proposalId];
