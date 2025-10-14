@@ -123,18 +123,23 @@ contract ConfidentialDAO is SepoliaConfig {
         emit TallyRevealRequested(proposalId, requestId);
     }
 
-    // Callback for decryption oracle (with debug event, signature check commented out)
+    // Callback for decryption oracle (FHEVM 0.8.0 format - ERC-7995 compliant)
     function resolveTallyCallback(
         uint256 requestId,
-        uint64 revealedFor,
-        uint64 revealedAgainst,
-        uint64 revealedAbstain,
-        bytes[] memory signatures
+        bytes memory cleartexts,
+        bytes memory decryptionProof
     ) external {
         emit DebugCallbackStep("callback_entered", 0);
-        FHE.checkSignatures(requestId, signatures);
+        
+        // Verify signatures against the request and provided cleartexts
+        FHE.checkSignatures(requestId, cleartexts, decryptionProof);
+        
         uint256 proposalId = proposalIndexByRequestId[requestId];
         emit DebugCallbackStep("proposal_found", proposalId);
+        
+        // Decode the cleartexts back into uint64 values [revealedFor, revealedAgainst, revealedAbstain]
+        (uint64 revealedFor, uint64 revealedAgainst, uint64 revealedAbstain) = abi.decode(cleartexts, (uint64, uint64, uint64));
+        
         Proposal storage prop = proposals[proposalId];
         prop.revealedFor = revealedFor;
         prop.revealedAgainst = revealedAgainst;

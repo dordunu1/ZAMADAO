@@ -7,8 +7,8 @@ require("hardhat-deploy");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
 
-require("./tasks/accounts");
-require("./tasks/FHECounter");
+// require("./tasks/accounts");
+// require("./tasks/FHECounter");
 
 // Run 'npx hardhat vars setup' to see the list of variables that need to be set
 
